@@ -1,0 +1,24 @@
+[package]
+name = "readit"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arrow = "52.2.0"
+arrow-array = "52.2.0"
+arrow-schema = "52.2.0"
+async-openai = "0.23.4"
+async-std = { version = "1.12.0", features = ["attributes"] }
+clap = { version = "4.5.16", features = ["derive"] }
+futures = "0.3.30"
+home = "0.5.9"
+lancedb = { version = "0.9.0", features = ["openai"] }
+lzma-sys = { version = "0.1.20", features = ["static"] }
+md5 = "0.7.0"
+minijinja = "2.2.0"
+serde = { version = "1.0.209", features = ["derive"] }
+serde_json = "1.0.127"
+serde_yml = "0.0.12"
+tokio = { version = "1.39.3", features = ["macros"] }
