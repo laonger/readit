@@ -9,45 +9,15 @@ use home;
 use serde::{Deserialize, Serialize};
 use serde_yml;
 
-use crate::structs;
+use crate::ignore_rules::Ignore;
+use crate::language_extensions::{
+    LanguageExtensions,
+    FileExtensionList,
+    FileExtensionTypeMap
+};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Ignore {
-    directories: Vec<String>,
-    directory_prefix: Vec<String>,
-    directory_posfix: Vec<String>,
-    files: Vec<String>,
-    file_prefix: Vec<String>,
-    file_posfix: Vec<String>,
-}
 
-pub type FileExtension = Vec<String>;
-pub type FileExtensionMap = HashMap<String, String>;
-
-pub fn read_ignore_file(path: &Path) -> Ignore {
-    let file = File::open(path).unwrap();
-    let ignore: Ignore = serde_yml::from_reader(file).unwrap();
-    ignore
-}
-
-pub fn read_file_extension(path: &Path) -> (FileExtension, FileExtensionMap){
-    let file = File::open(path).unwrap();
-    let _file_extension: HashMap<String, Vec<String>> 
-        = serde_yml::from_reader(file).unwrap();
-
-    let mut file_extension_map: FileExtensionMap = HashMap::new();
-    for (k, v) in _file_extension.iter() {
-        for i in v.iter() {
-            file_extension_map.insert(i.clone(), k.clone());
-        }
-    }
-    (
-        file_extension_map.clone().into_keys().collect::<FileExtension>(),
-        file_extension_map
-    )
-}
-
-fn file_filter(file: &PathBuf, ignore: &Ignore, file_ext_list: &FileExtension) -> bool {
+fn file_filter(file: &PathBuf, ignore: &Ignore, file_ext_list: &FileExtensionList) -> bool {
     let file_name = file.file_name().unwrap().to_str().unwrap();
     if ignore.directories.contains(&file_name.to_string()) {
         //println!("1, file_name: {:?}", file_name);
@@ -116,13 +86,8 @@ fn file_filter(file: &PathBuf, ignore: &Ignore, file_ext_list: &FileExtension) -
     false
 }
 
-pub fn read_config_file(path: &Path) -> structs::Config {
-    let file = File::open(path).unwrap();
-    let config: structs::Config = serde_yml::from_reader(file).unwrap();
-    config
-}
 
-fn source_language(file: &PathBuf, file_extension_map: &FileExtensionMap) -> String {
+fn source_language(file: &PathBuf, file_extension_map: &FileExtensionTypeMap) -> String {
     let ext = file.extension().unwrap().to_str().unwrap();
     let ext = format!(".{}", ext);
     match file_extension_map.get(&ext) {
@@ -135,21 +100,20 @@ pub fn list_path(
     path: &Path,
     file_list: &mut Vec<(PathBuf, String)>,
     ignore: &Ignore,
-    file_extension: &FileExtension,
-    file_extension_map: &FileExtensionMap
+    language_extensions: &LanguageExtensions,
 ) {
     match fs::read_dir(path) {
         Err(e) => println!("Error: {}", e),
         Ok(paths) => {
             for p in paths {
                 let p = p.unwrap().path();
-                if !file_filter(&p, ignore, file_extension) {
+                if !file_filter(&p, ignore, &language_extensions.ext_list) {
                     continue;
                 }
                 if p.is_dir() {
-                    list_path(&p, file_list, ignore, file_extension, file_extension_map);
+                    list_path(&p, file_list, ignore, language_extensions);
                 } else {
-                    let lang = source_language(&p, &file_extension_map);
+                    let lang = source_language(&p, &language_extensions.ext_type_map);
                     file_list.push((p, lang));
                 }
             }
@@ -157,27 +121,39 @@ pub fn list_path(
     }
 }
 
-pub fn init_home() -> String {
+pub fn home_dir() -> (String, bool) {
     let _home_dir_p = home::home_dir().unwrap();
     let home_dir = _home_dir_p.as_path().join(".readit");
+    (
+        home_dir.to_str().unwrap().to_string(),
+        home_dir.as_path().exists()
+    )
+}
+
+pub fn init_home(
+    home_dir: &String,
+) {
+
+    let ignore_rules: Ignore = Ignore::new();
+    let language_extensions: LanguageExtensions = LanguageExtensions::new();
+
+    let home_dir = Path::new(home_dir);
+
     if !home_dir.exists() {
-        fs::create_dir(home_dir.clone()).unwrap();
+        fs::create_dir(home_dir).unwrap();
     }
     if !home_dir.join("ignore_rules.yaml").exists() {
-        // TODO
-        fs::copy(
-            "/Users/laonger/Work/self/readit/ignore_rules.yaml",
-            home_dir.join("ignore_rules.yaml")
-        ).unwrap();
+        ignore_rules.write_to_file(
+            home_dir.join("ignore_rules.yaml").as_path()
+        )
+            
     }
     if !home_dir.join("language_extensions.yaml").exists() {
         // TODO
-        fs::copy(
-            "/Users/laonger/Work/self/readit/language_extensions.yaml",
-            home_dir.join("language_extensions.yaml")
-        ).unwrap();
+        language_extensions.write_to_file(
+            home_dir.join("language_extensions.yaml").as_path()
+        );
     };
-    home_dir.to_str().unwrap().to_string()
 }
 
 pub fn init_workdir() -> String {

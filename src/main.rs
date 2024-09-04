@@ -19,7 +19,6 @@ mod openai_utils;
 use openai_utils::OpenAI;
 
 mod file_utils;
-use file_utils::{read_ignore_file, read_file_extension, list_path};
 
 mod prompt_string;
 mod prompt_utils;
@@ -28,17 +27,16 @@ mod embeding_utils;
 use embeding_utils::Embedding;
 
 mod structs;
+mod ignore_rules;
+mod language_extensions;
 
 mod env;
+mod config;
 
 
 async fn init<'a> (
     env: &'a env::Env,
     client: &'a OpenAI,
-    path: &Path,
-    ignore: file_utils::Ignore,
-    file_extension: file_utils::FileExtension,
-    file_extension_map: file_utils::FileExtensionMap,
     force: Option<bool>,
 ) -> Embedding <'a> {
 
@@ -46,8 +44,12 @@ async fn init<'a> (
         env, client
     ).await.unwrap();
 
+    let path = env.work_dir();
+
     let mut file_list: Vec<(PathBuf, String)> = Vec::new();
-    list_path(path, &mut file_list, &ignore, &file_extension, &file_extension_map);
+    file_utils::list_path(
+        path, &mut file_list, &env.ignore, &env.language_extensions
+    );
 
     for (f, programming_lang) in file_list.iter() {
 
@@ -108,8 +110,9 @@ async fn init<'a> (
                 source_code: c.source_code,
             }).await.unwrap();
         };
-        println!("
-            file: {}\nanalysing use tokens: {:?}    embedding use tokens: {:?}",
+        println!(
+            "file: {}
+            analysing use tokens: {:?}    embedding use tokens: {:?}",
             f_path, a_tockens, e_tokens
         );
 
@@ -178,21 +181,11 @@ async fn main() {
 
     match command.command {
         Commands::Init(args) => {
-            let ignore = read_ignore_file(
-                home_dir.join("ignore_rules.yaml").as_path()
-            );
-
-            let (file_extension, file_extension_map) = read_file_extension(
-                home_dir.join("language_extensions.yaml").as_path()
-            );
-            init(
-                &_env, &client, path, 
-                ignore, file_extension, file_extension_map, Some(args.force),
-            ).await;
+            init(&_env, &client, Some(args.force)).await;
         },
         Commands::Ask(args) => {
             
-            if _env.is_new() {
+            if _env.is_new_project() {
                 println!("Please run init command first, you can run \"readit -h \" for help.");
                 return;
             }

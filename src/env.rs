@@ -5,19 +5,32 @@ use std::path::Path;
 use serde_yml;
 
 use crate::file_utils;
-use crate::structs;
+use crate::config;
+use crate::ignore_rules::Ignore;
+use crate::language_extensions::{
+    LanguageExtensions,
+    FileExtensionList,
+    FileExtensionTypeMap
+};
 
 pub struct Env {
     pub home_dir: String,
     pub work_dir: String,
     pub temp_dir: String,   // 项目配置，db等
-    pub config: structs::Config, // 全局配置
+    pub config: config::Config, // 全局配置
+    pub ignore: Ignore,
+    pub language_extensions: LanguageExtensions,
 }
 
 impl Env {
     pub fn new(path: Option<String>) -> Self {
 
-        let home_dir_string = file_utils::init_home();
+        let (home_dir_string, home_exist) = file_utils::home_dir();
+        if !home_exist {
+            file_utils::init_home(&home_dir_string);
+        }
+        let home_dir = Path::new(&home_dir_string);
+
         let work_dir_string = match path {
             Some(p) => {
                 p
@@ -26,41 +39,42 @@ impl Env {
                 file_utils::init_workdir()
             }
         };
+        let work_dir = Path::new(&work_dir_string);
         
-        let temp_dir = Path::new(&work_dir_string).join(".readit");
+        let temp_dir = work_dir.join(".readit");
         
-        let config_file = Path::new(&home_dir_string).join("config.yaml");
+        let config_file = home_dir.join("config.yaml");
+
+        // TODO 挪出去
         if !config_file.exists() {
-            Self::init_config(config_file.as_path());
+            config::Config::init_config(config_file.as_path());
         }
+
+        
+        let ignore = Ignore::new_from_path(
+            home_dir.join("ignore_rules.yaml").as_path()
+        );
+        let language_extensions = LanguageExtensions::new_from_path(
+            home_dir.join("language_extensions.yaml").as_path()
+        );
 
         Self {
             home_dir: home_dir_string,
             work_dir: work_dir_string,
             temp_dir: temp_dir.to_str().unwrap().to_string(),
-            config: file_utils::read_config_file(config_file.as_path()),
+            config: config::Config::new_from_path(config_file.as_path()),
+            ignore,
+            language_extensions,
         }
     }
 
-    pub fn is_new(&self) -> bool {
+    /// new project
+    pub fn is_new_project(&self) -> bool {
         if Path::new(&self.temp_dir).join("db").exists() {
             false
         } else {
             true
         }
-    }
-
-    pub fn init_config(file_path: &Path) {
-        let config = structs::Config {
-            openai_key      : Some("".to_string()),
-            openai_base     : Some("https://api.openai.com/v1".to_string()),
-            chat_model      : Some("gpt-4o".to_string()),
-            analyse_model   : Some("gpt-4o".to_string()),
-            embedding_model : Some("text-embedding-3-large".to_string()),
-            dim             : Some(256),
-        };
-        let config_string = serde_yml::to_string(&config).unwrap();
-        fs::write(file_path, config_string).unwrap();
     }
 
     pub fn home_dir(&self) -> &Path {

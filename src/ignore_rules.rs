@@ -1,4 +1,9 @@
-directories:
+use std::fs;
+use std::path::Path;
+use serde::{Deserialize, Serialize};
+use serde_yml;
+
+const IGNORE_RULES: &str = &"directories:
   - .git
   - .github
   - .vscode
@@ -106,3 +111,30 @@ file_posfix:
   - .bib
   - .bibtex
   - .Dockerfile
+";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Ignore {
+    pub directories: Vec<String>,
+    pub directory_prefix: Vec<String>,
+    pub directory_posfix: Vec<String>,
+    pub files: Vec<String>,
+    pub file_prefix: Vec<String>,
+    pub file_posfix: Vec<String>,
+}
+
+impl Ignore {
+    pub fn new() -> Self {
+        serde_yml::from_str(IGNORE_RULES).unwrap()
+    }
+
+    pub fn new_from_path(path: &Path) -> Self {
+        let ignore_string = fs::read_to_string(path).unwrap();
+        serde_yml::from_str(&ignore_string).unwrap()
+    }
+    
+    pub fn write_to_file(&self, path: &Path) {
+        let ignore_string = serde_yml::to_string(&self).unwrap();
+        fs::write(path, ignore_string).unwrap();
+    }
+}
