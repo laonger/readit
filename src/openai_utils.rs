@@ -32,6 +32,8 @@ use async_openai::{
 
 use serde_json;
 
+use html_escape;
+
 use crate::{prompt_utils, structs};
 
 use crate::env;
@@ -48,23 +50,23 @@ impl OpenAI {
     pub fn new(env: &env::Env) -> Self {
 
         let config = OpenAIConfig::new()
-            .with_api_key(env.config.openai_key.clone())
-            .with_api_base(env.config.openai_base.clone())
+            .with_api_key(env.config.openai_key())
+            .with_api_base(env.config.openai_base())
         ;
         
         Self {
             client: Client::with_config(config),
-            dim: env.config.dim as u32,
-            chat_model: env.config.chat_model.clone(),
-            analyse_model: env.config.analyse_model.clone(),
-            embedding_model: env.config.embedding_model.clone(),
+            dim: env.config.dim() as u32,
+            chat_model: env.config.chat_model(),
+            analyse_model: env.config.analyse_model(),
+            embedding_model: env.config.embedding_model(),
         }
     }
     
 
     pub async fn analyse_source(&self,
         code_string: String, programming_lang: String, language: String
-    ) -> Result<structs::GPTResponse, OpenAIError> 
+    ) -> Result<(structs::GPTResponse, u32), OpenAIError> 
     {
         let prompt = prompt_utils::analyse_source_file_prompt(
             programming_lang, code_string, language
@@ -90,18 +92,38 @@ impl OpenAI {
             ])
             .build()?;
 
-        let response = self.client.chat().create(request).await?;
-        //println!("{:?}", response);
-        let _text = response.choices[0].clone().message.content.unwrap();
-        let mut text = String::new();
-        if _text.starts_with("```json\n"){
-            text = _text.replace("```json\n", "").replace("```", "");
-        } else {
-            text = _text;
-        }
-        //println!("analyze: {:?}", text);
-        let code_description: structs::GPTResponse = serde_json::from_str(&text).unwrap();
-        Ok(code_description)
+        let mut n = 0;
+        let mut tokens = 0;
+        let code_description = loop {
+            let response = self.client.chat().create(request.clone()).await?;
+            tokens += match response.usage {
+                None => 0,
+                Some(ref u) => {
+                    u.total_tokens
+                }
+            };
+            //println!("{:?}", response);
+            let _text = response.choices[0].clone().message.content.unwrap();
+            let text = if _text.starts_with("```json\n"){
+                _text.replace("```json\n", "").replace("```", "")
+            } else {
+                _text
+            };
+            //println!("analyze: {:?}", text);
+            let code_description: structs::GPTResponse = match serde_json::from_str(&text){
+                Ok(c) => c,
+                Err(_) => {
+                    n += 1;
+                    if n >= 3 {
+                        panic!("Failed to parse response from OpenAI")
+                    }
+                    continue;
+                }
+            };
+            break code_description
+        };
+
+        Ok((code_description, tokens))
     }
 
     pub async fn split_source(&self,
@@ -136,14 +158,14 @@ impl OpenAI {
         } else {
             text = _text;
         }
-        println!("split: {:?}", text);
+        //println!("split: {:?}", text);
         let code_description: structs::GPTCodeSplitResponse = serde_json::from_str(&text).unwrap();
         Ok(code_description)
     }
 
     pub async fn ask(&self,
         query: String, code_list: Vec<String>, language: String
-    ) -> Result<String, OpenAIError> 
+    ) -> Result<(String, u32), OpenAIError> 
     {
         let prompt = prompt_utils::ask_prompt(
             query, code_list, language
@@ -170,9 +192,15 @@ impl OpenAI {
             .build()?;
 
         let response = self.client.chat().create(request).await?;
-        //println!("{:?}", response);
+        let tokens = match response.usage {
+            None => 0,
+            Some(ref u) => {
+                u.total_tokens
+            }
+        };
         let _text = response.choices[0].clone().message.content.unwrap();
-        Ok(_text)
+        let _text = html_escape::decode_html_entities(&_text).to_string();
+        Ok((_text, tokens))
     }
 
     pub async fn chat(&self, message: String) -> Result<String, OpenAIError> {
@@ -197,7 +225,7 @@ impl OpenAI {
 
 
     pub async fn embedding_compute(&self, source: Arc<dyn Array>) 
-        -> Result<Float32Array, OpenAIError> 
+        -> Result<(Float32Array, u32), OpenAIError> 
     {
 
         let input = match source.data_type() {
@@ -242,11 +270,13 @@ impl OpenAI {
 
                 let res = embed.create(req).await?;
 
+                let tokens = res.usage.prompt_tokens;
+
                 for Embedding { embedding, .. } in res.data.iter() {
                     builder.append_slice(embedding);
                 }
 
-                Ok(builder.finish())
+                Ok((builder.finish(), tokens))
             })
         })
     }

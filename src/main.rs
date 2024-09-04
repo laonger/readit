@@ -68,11 +68,11 @@ async fn init<'a> (
             }
         }
 
-        let response = client.analyse_source(
+        let (response, a_tockens) = client.analyse_source(
             code.clone(), programming_lang.to_string(), "中文".to_string()
         ).await.unwrap();
 
-        let _ = embedding_obj.add_data(structs::CodeDescription {
+        let mut e_tokens = embedding_obj.add_data(structs::CodeDescription {
             //line_number: 0,
             //lines: 0,
             file: Some(f_path.clone()),
@@ -85,8 +85,8 @@ async fn init<'a> (
         }).await.unwrap();
 
         for c in response.classes {
-            println!("c: {:?}", c);
-            let _ = embedding_obj.add_data(structs::CodeDescription {
+            //println!("c: {:?}", c);
+            e_tokens += embedding_obj.add_data(structs::CodeDescription {
                 file: Some(f_path.clone()),
                 md5: Some(md5_value.clone()),
                 code_type: Some("class".to_string()),
@@ -97,8 +97,8 @@ async fn init<'a> (
             }).await.unwrap();
         };
         for c in response.functions {
-            println!("c: {:?}", c);
-            let _ = embedding_obj.add_data(structs::CodeDescription {
+            //println!("c: {:?}", c);
+            e_tokens += embedding_obj.add_data(structs::CodeDescription {
                 file: Some(f_path.clone()),
                 md5: Some(md5_value.clone()),
                 code_type: Some("function".to_string()),
@@ -108,6 +108,10 @@ async fn init<'a> (
                 source_code: c.source_code,
             }).await.unwrap();
         };
+        println!("
+            file: {}\nanalysing use tokens: {:?}    embedding use tokens: {:?}",
+            f_path, a_tockens, e_tokens
+        );
 
     }
     embedding_obj
@@ -157,12 +161,18 @@ struct AskArgs {
 async fn main() {
 
     let command = Cli::parse();
-    println!("{:?}", command);
+    //println!("{:?}", command);
 
     let _env = env::Env::new(command.path);
 
+
     let path = _env.work_dir();
     let home_dir = _env.home_dir();
+
+    if !_env.check_openai_key() {
+        println!("Please set openai key first, \nrun \"export OPENAI_KEY=your_openai_key\" in your shell, \nor set openai_key in $HOME/.readit/config.yaml \nyou can run \"readit -h \" for help.");
+        return;
+    }
 
     let client = OpenAI::new(&_env);
 
@@ -181,15 +191,20 @@ async fn main() {
             ).await;
         },
         Commands::Ask(args) => {
+            
+            if _env.is_new() {
+                println!("Please run init command first, you can run \"readit -h \" for help.");
+                return;
+            }
+
             let embedding_obj = Embedding::new(
                 &_env, &client
             ).await.unwrap();
-            //let query = "is_file_change函数是做什么用的？".to_string();
             let query = args.query.clone();
-            let code_list = embedding_obj.search(query.clone()).await.unwrap();
-            //println!("code_list: {:?}", code_list);
-            let res = client.ask(query, code_list, "中文".to_string()).await.unwrap();
-            print!("{:#?}", res);
+            let (code_list, e_tokens) = embedding_obj.search(query.clone()).await.unwrap();
+            let (res, a_tokens) = client.ask(query, code_list, "中文".to_string()).await.unwrap();
+            println!("{}", res);
+            println!("tokens usage: {:?}", a_tokens+e_tokens);
         }
     }
 

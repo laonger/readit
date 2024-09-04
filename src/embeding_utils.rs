@@ -56,13 +56,13 @@ impl <'a> Embedding <'a> {
         let path = env.work_dir().join(".readit").join("db");
 
         let db = connect(path.as_path().to_str().unwrap()).execute().await?;
-        let table = Self::open_table(client, &db, env.config.dim as i32).await?;
+        let table = Self::open_table(client, &db, env.config.dim() as i32).await?;
 
         Ok(Self {
             client,
             db,
             table,
-            dim: env.config.dim as usize,
+            dim: env.config.dim() as usize,
         })
     }
 
@@ -102,7 +102,7 @@ impl <'a> Embedding <'a> {
         let _content = "!@#$%^&*)*&(^#$#^@^".to_string();
         let content = StringArray::from_iter_values(vec![ _content.clone(), ]);
 
-        let embedding = client.embedding_compute(
+        let (embedding, tokens) = client.embedding_compute(
                 Arc::new(StringArray::from_iter_values(once(_content)))
         ).await.unwrap();
 
@@ -134,7 +134,12 @@ impl <'a> Embedding <'a> {
     }
 
     async fn init_table(client: &openai_utils::OpenAI, db: &Connection, dim:i32) -> Result<Table>{
-        db.create_table(TABLE_NAME, Self::init_data(client, dim).await)
+        //db.create_table(TABLE_NAME, Self::init_data(client, dim).await)
+        //    .mode(CreateTableMode::Overwrite)
+        //    .execute()
+        //    .await
+        let schema = Self::get_schema(dim);
+        db.create_empty_table(TABLE_NAME, schema)
             .mode(CreateTableMode::Overwrite)
             .execute()
             .await
@@ -154,7 +159,7 @@ impl <'a> Embedding <'a> {
         Ok(table)
     }
 
-    pub async fn add_data(&self, data: structs::CodeDescription) -> Result<()> {
+    pub async fn add_data(&self, data: structs::CodeDescription) -> Result<u32> {
 
         let schema = Self::get_schema(self.dim as i32);
 
@@ -176,7 +181,7 @@ impl <'a> Embedding <'a> {
 
         let content = StringArray::from_iter_values(vec![content_string.to_string()]);
 
-        let embedding = self.client.embedding_compute(
+        let (embedding, tokens) = self.client.embedding_compute(
                 Arc::new(StringArray::from_iter_values(once(content_string)))
         ).await.unwrap();
 
@@ -206,16 +211,19 @@ impl <'a> Embedding <'a> {
         ).unwrap();
         self.table.add(Box::new(RecordBatchIterator::new(vec![Ok(rb)], schema)))
             .execute()
-            .await
+            .await?;
+        Ok(tokens)
     }
 
-    pub async fn search(&self, prompt: String) -> Result<Vec<String>> {
+    pub async fn search(&self, prompt: String) -> Result<(Vec<String>, u32)> {
 
         let query = Arc::new(StringArray::from_iter_values(once(prompt)));
 
-        let query_vector = self.client.embedding_compute(query)
+        let (query_vector, tokens) = self.client.embedding_compute(query)
             .await
             .unwrap()
+        ;
+        let query_vector = query_vector
             .iter()
             .map(|x| x.unwrap())
             .collect::<Vec<f32>>()
@@ -239,7 +247,7 @@ impl <'a> Embedding <'a> {
             let text = out.iter().next().unwrap().unwrap();
             text.to_string()
         }).collect();
-        Ok(r)
+        Ok((r, tokens))
     }
 
     pub async fn is_file_change(&self, file_path: &String, md5: &String) -> Result<bool> {

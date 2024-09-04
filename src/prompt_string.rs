@@ -42,6 +42,8 @@ Understand the user's query and explain with the related description and source 
 {{ item}}
 
 {% endfor %}
+
+No need to give the whole source code back.
 ";
 
 ////////////////////////
