@@ -1,7 +1,8 @@
 use std::io;
 use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::io::{stdout, Write, Read};
+use futures::StreamExt;
 //use std::env as std_env;
 
 use clap::{
@@ -278,9 +279,26 @@ async fn main() {
 
             let query = args.query.clone();
             let (code_list, e_tokens) = embedding_obj.search(query.clone()).await.unwrap();
-            let (res, a_tokens) = client.ask(query, code_list, "中文".to_string()).await.unwrap();
-            println!("{}", res);
-            println!("tokens usage: {:?}", a_tokens+e_tokens);
+            let mut res = client.ask(query, code_list, "中文".to_string()).await.unwrap();
+            
+            let mut lock = stdout().lock();
+            while let Some(result) = res.next().await {
+                match result {
+                    Ok(response) => {
+                        response.choices.iter().for_each(|chat_choice| {
+                            if let Some(ref content) = chat_choice.delta.content {
+                                write!(lock, "{}", content).unwrap();
+                            }
+                        });
+                    }
+                    Err(err) => {
+                        writeln!(lock, "error: {err}").unwrap();
+                    }
+                }
+                stdout().flush().unwrap();
+            }
+            //println!("{}", res);
+            //println!("tokens usage: {:?}", a_tokens+e_tokens);
         }
     }
 

@@ -13,6 +13,7 @@ use async_openai::{
     config::OpenAIConfig,
     types::{
         CreateChatCompletionRequestArgs,
+        ChatCompletionResponseStream,
         CreateChatCompletionResponse,
 
         ChatCompletionResponseFormat,
@@ -165,7 +166,7 @@ impl OpenAI {
 
     pub async fn ask(&self,
         query: String, code_list: Vec<String>, language: String
-    ) -> Result<(String, u32), OpenAIError> 
+    ) -> Result<ChatCompletionResponseStream, OpenAIError> 
     {
         let prompt = prompt_utils::ask_prompt(
             query, code_list, language
@@ -173,7 +174,7 @@ impl OpenAI {
 
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.chat_model)
-            .stream(false)
+            .stream(true)
             .response_format(
                 ChatCompletionResponseFormat {
                     r#type: ChatCompletionResponseFormatType::Text
@@ -191,22 +192,23 @@ impl OpenAI {
             ])
             .build()?;
 
-        let response = self.client.chat().create(request).await?;
-        let tokens = match response.usage {
-            None => 0,
-            Some(ref u) => {
-                u.total_tokens
-            }
-        };
-        let _text = response.choices[0].clone().message.content.unwrap();
-        let _text = html_escape::decode_html_entities(&_text).to_string();
-        Ok((_text, tokens))
+        let response = self.client.chat().create_stream(request).await?;
+        //let tokens = match response.usage {
+        //    None => 0,
+        //    Some(ref u) => {
+        //        u.total_tokens
+        //    }
+        //};
+        //let _text = response.choices[0].clone().message.content.unwrap();
+        //let _text = html_escape::decode_html_entities(&_text).to_string();
+        //Ok((_text, tokens))
+        Ok(response)
     }
 
-    pub async fn chat(&self, message: String) -> Result<String, OpenAIError> {
+    pub async fn chat(&self, message: String) -> Result<ChatCompletionResponseStream, OpenAIError> {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.chat_model)
-            .stream(false)
+            .stream(true)
             .messages([
                 ChatCompletionRequestSystemMessageArgs::default()
                     .content("You are a helpful assistant.")
@@ -219,8 +221,9 @@ impl OpenAI {
             ])
             .build()?;
 
-        let response = self.client.chat().create(request).await?;
-        Ok(response.choices[0].clone().message.content.unwrap())
+        let response = self.client.chat().create_stream(request).await?;
+        Ok(response)
+        //Ok(response.choices[0].clone().message.content.unwrap())
     }
 
 
