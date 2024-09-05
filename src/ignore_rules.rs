@@ -113,7 +113,7 @@ file_posfix:
   - .Dockerfile
 ";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Ignore {
     pub directories: Vec<String>,
     pub directory_prefix: Vec<String>,

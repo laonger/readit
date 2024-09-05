@@ -13,6 +13,7 @@ use crate::language_extensions::{
     FileExtensionTypeMap
 };
 
+#[derive(Debug, Clone)]
 pub struct Env {
     pub home_dir: String,
     pub work_dir: String,

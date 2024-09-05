@@ -118,6 +118,7 @@ XML:
 pub type FileExtensionList = Vec<String>;
 pub type FileExtensionTypeMap = HashMap<String, String>;
 
+#[derive(Debug, Clone)]
 pub struct LanguageExtensions {
     pub ext_list: FileExtensionList,
     pub ext_type_map: FileExtensionTypeMap,

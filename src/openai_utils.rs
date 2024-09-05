@@ -264,20 +264,32 @@ impl OpenAI {
         };
 
         // TODO: request batching and retry logic
-        task::block_in_place(move || {
-            Handle::current().block_on(async {
-                let mut builder = Float32Builder::new();
+        //task::block_in_place(move || {
+        //    Handle::current().block_on(async {
+        //        let mut builder = Float32Builder::new();
 
-                let res = embed.create(req).await?;
+        //        let res = embed.create(req).await?;
 
-                let tokens = res.usage.prompt_tokens;
+        //        let tokens = res.usage.prompt_tokens;
 
-                for Embedding { embedding, .. } in res.data.iter() {
-                    builder.append_slice(embedding);
-                }
+        //        for Embedding { embedding, .. } in res.data.iter() {
+        //            builder.append_slice(embedding);
+        //        }
 
-                Ok((builder.finish(), tokens))
-            })
-        })
+        //        Ok((builder.finish(), tokens))
+        //    })
+        //})
+
+        let mut builder = Float32Builder::new();
+
+        let res = embed.create(req).await?;
+
+        let tokens = res.usage.prompt_tokens;
+
+        for Embedding { embedding, .. } in res.data.iter() {
+            builder.append_slice(embedding);
+        }
+
+        Ok((builder.finish(), tokens))
     }
 }
