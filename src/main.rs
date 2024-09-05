@@ -53,7 +53,7 @@ async fn embedding_file(
         file_content.clone(), lang.to_string(), "中文".to_string()
     ).await.unwrap();
 
-    let mut e_tokens = embedding_obj.add_data(structs::CodeDescription {
+    let file_des = structs::CodeDescription {
         //line_number: 0,
         //lines: 0,
         file: Some(f_path.clone()),
@@ -63,7 +63,9 @@ async fn embedding_file(
         name: f_name,
         purpose: response.clone().purpose,
         source_code: file_content,
-    }).await.unwrap();
+    };
+
+    let mut e_tokens = embedding_obj.add_data(file_des).await.unwrap();
 
     for c in response.classes {
         //println!("c: {:?}", c);
@@ -127,7 +129,20 @@ async fn force_init(env: env::Env, ) {
         ).await;
 
     };
-    
+
+
+    let client = OpenAI::new(&env);
+    let embedding_obj = Embedding::new(
+        &env, &client
+    ).await.unwrap();
+
+    let tokens = embedding_obj.update_summary().await;
+
+    println!(
+        "projedct summary embedding use tokens: {:?}",
+        tokens
+    );
+
 }
 
 async fn init(env: env::Env ) {
@@ -201,6 +216,19 @@ async fn init(env: env::Env ) {
         ).await;
 
     };
+
+    let client = OpenAI::new(&env);
+    let embedding_obj = Embedding::new(
+        &env, &client
+    ).await.unwrap();
+
+    let tokens = embedding_obj.update_summary().await;
+
+    println!(
+        "projedct summary embedding use tokens: {:?}",
+        tokens
+    );
+
     println!("Embedding Done");
     
 }

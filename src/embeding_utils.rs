@@ -76,6 +76,7 @@ impl <'a> Embedding <'a> {
             Field::new("code_type"   , DataType::Utf8    , false)    , // "file" , "class" , "function"
             Field::new("lang"        , DataType::Utf8    , false)    ,
             Field::new("name"        , DataType::Utf8    , false)    ,
+            Field::new("purpose"     , DataType::Utf8    , false)    ,
             Field::new("content"     , DataType::Utf8    , false)    ,  // name + purpose + code
             Field::new(
                 "embedings", 
@@ -89,55 +90,7 @@ impl <'a> Embedding <'a> {
         schema
     }
 
-    async fn init_data(client: &openai_utils::OpenAI, dim: i32) -> impl IntoArrow {
-        let schema = Self::get_schema(dim);
-
-        //let line_number = Int32Array::from(vec![0]);
-        //let lines = Int32Array::from(vec![0]);
-        let file = StringArray::from_iter_values(vec![ "file_name",]);
-        let md5 = StringArray::from_iter_values(vec![ "md5",]);
-        let code_type = StringArray::from_iter_values(vec![ "file",]);
-        let lang = StringArray::from_iter_values(vec![ "lang",]);
-        let name = StringArray::from_iter_values(vec![ "file_name",]);
-        let _content = "!@#$%^&*)*&(^#$#^@^".to_string();
-        let content = StringArray::from_iter_values(vec![ _content.clone(), ]);
-
-        let (embedding, tokens) = client.embedding_compute(
-                Arc::new(StringArray::from_iter_values(once(_content)))
-        ).await.unwrap();
-
-        let float_builder = Float32Array::builder(dim as usize);
-        let mut fixed_size_list_builder = FixedSizeListBuilder::new(float_builder, dim);  // 每个子数组长度为 3
-
-        for e in embedding.iter() {
-            fixed_size_list_builder.values().append_value(e.unwrap());
-        }
-        fixed_size_list_builder.append(true);
-
-        let embedding_array = fixed_size_list_builder.finish();
-
-        let rb = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                //Arc::new(line_number),
-                //Arc::new(lines      ),
-                Arc::new(file       ),
-                Arc::new(md5       ),
-                Arc::new(code_type  ),
-                Arc::new(lang       ),
-                Arc::new(name       ),
-                Arc::new(content    ),
-                Arc::new(embedding_array  ),
-            ],
-        ).unwrap();
-        Box::new(RecordBatchIterator::new(vec![Ok(rb)], schema))
-    }
-
-    async fn init_table(client: &openai_utils::OpenAI, db: &Connection, dim:i32) -> Result<Table>{
-        //db.create_table(TABLE_NAME, Self::init_data(client, dim).await)
-        //    .mode(CreateTableMode::Overwrite)
-        //    .execute()
-        //    .await
+    async fn init_table(db: &Connection, dim:i32) -> Result<Table>{
         let schema = Self::get_schema(dim);
         db.create_empty_table(TABLE_NAME, schema)
             .mode(CreateTableMode::Overwrite)
@@ -150,7 +103,7 @@ impl <'a> Embedding <'a> {
         let table = match db.open_table("vectors").execute().await {
             Err(_) => {
                 println!("no table");
-                let t = Self::init_table(client, db, dim).await?;
+                let t = Self::init_table(db, dim).await?;
                 t
             },
             Ok(t) => t
@@ -170,6 +123,7 @@ impl <'a> Embedding <'a> {
         let code_type = StringArray::from_iter_values(vec![ data.code_type.clone().unwrap(),]);
         let lang = StringArray::from_iter_values(vec![ data.lang.clone().unwrap(),]);
         let name = StringArray::from_iter_values(vec![ data.name.clone(),]);
+        let purpose = StringArray::from_iter_values(vec![ data.purpose.clone(),]);
         
         let content_string = format!("//file {:} \n//{:} name: {:}\n\n// {:}\n{:}",
                 data.file.clone().unwrap(),
@@ -201,10 +155,11 @@ impl <'a> Embedding <'a> {
                 //Arc::new(line_number),
                 //Arc::new(lines      ),
                 Arc::new(file       ),
-                Arc::new(md5       ),
+                Arc::new(md5        ),
                 Arc::new(code_type  ),
                 Arc::new(lang       ),
                 Arc::new(name       ),
+                Arc::new(purpose    ),
                 Arc::new(content    ),
                 Arc::new(embedding_array  ),
             ],
@@ -286,6 +241,51 @@ impl <'a> Embedding <'a> {
             .await?
         ;
         Ok(results)
-        
+    }
+
+    pub async fn update_summary(&self) -> u32 {
+        let all = self.all().await.unwrap();
+        let all_file_des: Vec<(String, String)> = all.iter().map(|rb| {
+            let file = rb.column_by_name("file")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .unwrap()
+                .to_string()
+            ;
+            let purpose = rb.column_by_name("purpose")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .unwrap()
+                .to_string()
+            ;
+            (file, purpose)
+        }).collect();
+
+        let summary = all_file_des
+            .iter()
+            .map(|(f, p)| format!("{}: {}", f, p))
+            .collect::<Vec<String>>()
+            .join("\n")
+        ;
+
+        self.add_data(structs::CodeDescription {
+            file: Some("whole project".to_string()),
+            md5: Some("".to_string()),
+            code_type: Some("file".to_string()),
+            lang: Some("".to_string()),
+            name: "whole project".to_string(),
+            purpose: summary,
+            source_code: "".to_string(),
+        }).await.unwrap()
     }
 }
