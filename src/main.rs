@@ -2,7 +2,7 @@ use std::io;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::{stdout, Write, Read};
-use futures::StreamExt;
+use futures::{Future, StreamExt};
 //use std::env as std_env;
 
 use clap::{
@@ -16,6 +16,8 @@ use clap::{
 use md5;
 
 use tokio;
+use tokio::task::JoinSet;
+use tokio::{runtime::Handle, task};
 
 mod openai_utils;
 use openai_utils::OpenAI;
@@ -43,11 +45,14 @@ async fn embedding_file(
     f_path: String,
     md5_value: String,
     file_content: String,
+    is_update: Option<bool>,
 ) {
     let client = OpenAI::new(&env);
     let embedding_obj = Embedding::new(
         &env, &client
     ).await.unwrap();
+
+    //println!("f: {:?}", f_name);
 
     let (response, a_tockens) = client.analyse_source(
         file_content.clone(), lang.to_string(), "中文".to_string()
@@ -65,11 +70,13 @@ async fn embedding_file(
         source_code: file_content,
     };
 
-    let mut e_tokens = embedding_obj.add_data(file_des).await.unwrap();
-
+    let mut e_tokens = match is_update {
+        Some(true) => embedding_obj.update(file_des).await.unwrap(),
+        _ => embedding_obj.add_data(file_des).await.unwrap()
+    };
     for c in response.classes {
         //println!("c: {:?}", c);
-        e_tokens += embedding_obj.add_data(structs::CodeDescription {
+        let data = structs::CodeDescription {
             file: Some(f_path.clone()),
             md5: Some(md5_value.clone()),
             code_type: Some("class".to_string()),
@@ -77,11 +84,15 @@ async fn embedding_file(
             name: c.name,
             purpose: c.purpose,
             source_code: c.source_code,
-        }).await.unwrap();
+        };
+        e_tokens += match is_update {
+            Some(true) => embedding_obj.update(data).await.unwrap(),
+            _ => embedding_obj.add_data(data).await.unwrap()
+        };
     };
     for c in response.functions {
         //println!("c: {:?}", c);
-        e_tokens += embedding_obj.add_data(structs::CodeDescription {
+        let data = structs::CodeDescription {
             file: Some(f_path.clone()),
             md5: Some(md5_value.clone()),
             code_type: Some("function".to_string()),
@@ -89,7 +100,11 @@ async fn embedding_file(
             name: c.name,
             purpose: c.purpose,
             source_code: c.source_code,
-        }).await.unwrap();
+        };
+        e_tokens += match is_update {
+            Some(true) => embedding_obj.update(data).await.unwrap(),
+            _ => embedding_obj.add_data(data).await.unwrap()
+        };
     };
     println!(
         "{}  analysing use tokens: {:?}    embedding use tokens: {:?}",
@@ -101,19 +116,27 @@ async fn force_init(env: env::Env, ) {
 
     let path = env.work_dir();
 
+    let client = OpenAI::new(&env);
+    let embedding_obj = Embedding::new(
+        &env, &client
+    ).await.unwrap();
+
+    embedding_obj.clean_all().await.unwrap();
+
     let mut file_list: Vec<(PathBuf, String)> = Vec::new();
     file_utils::list_path(
         path, &mut file_list, &env.ignore, &env.language_extensions
     );
 
+    let mut job_set = JoinSet::new();
     for (f, programming_lang) in file_list.iter() {
 
         let f_path = f.canonicalize().unwrap().to_str().unwrap().to_string().clone();
         let f_name = f.to_str().unwrap().to_string().clone();
         let programming_lang = programming_lang.clone();
 
-        println!("f: {:?}", f_path);
 
+        println!("analyse: {:?}", f_path);
         //let (f, programming_lang) = file_list.get(0).unwrap();
         let mut code = String::new();
         let _ = File::open(f).unwrap().read_to_string(&mut code);
@@ -122,27 +145,33 @@ async fn force_init(env: env::Env, ) {
 
         let _env = env.clone();
         
-        embedding_file(
-            _env, f_name, 
-            programming_lang, f_path, 
-            md5_value, code
-        ).await;
-
+        job_set.spawn(async move {
+            embedding_file(
+                _env, f_name, 
+                programming_lang, f_path, 
+                md5_value, code, None
+            ).await;
+        });
+        //embedding_file(
+        //    _env, f_name, 
+        //    programming_lang, f_path, 
+        //    md5_value, code
+        //).await;
     };
+    let mut seen = vec![];
+    while let Some(res) = job_set.join_next().await {
+        res.unwrap();
+        seen.push(true);
+    }
 
-
-    let client = OpenAI::new(&env);
-    let embedding_obj = Embedding::new(
-        &env, &client
-    ).await.unwrap();
-
-    let tokens = embedding_obj.update_summary().await;
-
-    println!(
-        "projedct summary embedding use tokens: {:?}",
-        tokens
-    );
-
+    if seen.len() == file_list.len(){
+        println!("Embedding Done");
+        let tokens = embedding_obj.update_summary().await;
+        println!(
+            "projedct summary embedding use tokens: {:?}",
+            tokens
+        );
+    };
 }
 
 async fn init(env: env::Env ) {
@@ -203,31 +232,44 @@ async fn init(env: env::Env ) {
         return
     }
     println!("analysing....");
+    let mut job_set = JoinSet::new();
     for (f, f_path, programming_lang, code, md5_value) in _file_list {
 
+        println!("analyse: {:?}", f_path);
         let _env = env.clone();
         let f_name = f.to_str().unwrap().to_string().clone();
         let programming_lang = programming_lang.clone();
         
-        embedding_file(
-            _env, f_name, 
-            programming_lang, f_path, 
-            md5_value, code
-        ).await;
+        job_set.spawn(async move {
+            embedding_file(
+                _env, f_name, 
+                programming_lang, f_path, 
+                md5_value, code, Some(true)
+            ).await;
+        });
 
     };
 
-    let client = OpenAI::new(&env);
-    let embedding_obj = Embedding::new(
-        &env, &client
-    ).await.unwrap();
+    let mut seen = vec![];
+    while let Some(res) = job_set.join_next().await {
+        res.unwrap();
+        seen.push(true);
+    }
 
-    let tokens = embedding_obj.update_summary().await;
+    if seen.len() == file_list.len(){
+        println!("Embedding Done");
 
-    println!(
-        "projedct summary embedding use tokens: {:?}",
-        tokens
-    );
+        let client = OpenAI::new(&env);
+        let embedding_obj = Embedding::new(
+            &env, &client
+        ).await.unwrap();
+        let tokens = embedding_obj.update_summary().await;
+
+        println!(
+            "projedct summary embedding use tokens: {:?}",
+            tokens
+        );
+    }
 
     println!("Embedding Done");
     
@@ -282,7 +324,7 @@ async fn main() {
 
     if !_env.check_openai_key() {
         println!("Please set openai key first, \nrun \"export OPENAI_KEY=your_openai_key\" in your shell, \nor set openai_key in $HOME/.readit/config.yaml \nyou can run \"readit -h \" for help.");
-        return;
+        return
     }
 
 
@@ -298,7 +340,7 @@ async fn main() {
 
             if _env.is_new_project() {
                 println!("Please run init command first, you can run \"readit -h \" for help.");
-                return;
+                return
             }
 
             let embedding_obj = Embedding::new(
@@ -328,6 +370,6 @@ async fn main() {
             //println!("{}", res);
             //println!("tokens usage: {:?}", a_tokens+e_tokens);
         }
-    }
+    };
 
 }

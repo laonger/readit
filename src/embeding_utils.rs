@@ -170,6 +170,17 @@ impl <'a> Embedding <'a> {
         Ok(tokens)
     }
 
+    pub async fn update(&self, data: structs::CodeDescription) -> Result<u32> {
+        self.table.delete(
+            format!("file = '{}'", data.file.clone().unwrap()).as_str()
+        ).await?;
+        self.add_data(data).await
+    }
+
+    pub async fn clean_all(&self) -> Result<()> {
+        self.table.delete("md5 like '%'").await
+    }
+
     pub async fn search(&self, prompt: String) -> Result<(Vec<String>, u32)> {
 
         let query = Arc::new(StringArray::from_iter_values(once(prompt)));
@@ -236,9 +247,10 @@ impl <'a> Embedding <'a> {
         let results = self.table.query()
             .select(Select::All)
             .execute()
-            .await?
+            .await.unwrap();
+        let results = results
             .try_collect::<Vec<RecordBatch>>()
-            .await?
+            .await.unwrap()
         ;
         Ok(results)
     }
@@ -277,6 +289,8 @@ impl <'a> Embedding <'a> {
             .collect::<Vec<String>>()
             .join("\n")
         ;
+
+        self.table.delete("name = 'whole project'").await.unwrap();
 
         self.add_data(structs::CodeDescription {
             file: Some("whole project".to_string()),

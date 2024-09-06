@@ -93,9 +93,11 @@ impl OpenAI {
             ])
             .build()?;
 
+
         let mut n = 0;
         let mut tokens = 0;
         let code_description = loop {
+
             let response = self.client.chat().create(request.clone()).await?;
             tokens += match response.usage {
                 None => 0,
@@ -103,6 +105,7 @@ impl OpenAI {
                     u.total_tokens
                 }
             };
+
             //println!("{:?}", response);
             let _text = response.choices[0].clone().message.content.unwrap();
             let text = if _text.starts_with("```json\n"){
@@ -265,6 +268,7 @@ impl OpenAI {
             user: None,
             dimensions: Some(self.dim),
         };
+        //println!("embedding_compute: {:?}", req);
 
         // TODO: request batching and retry logic
         //task::block_in_place(move || {
