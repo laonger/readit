@@ -55,7 +55,7 @@ async fn embedding_file(
     //println!("f: {:?}", f_name);
 
     let (response, a_tockens) = client.analyse_source(
-        file_content.clone(), lang.to_string(), "中文".to_string()
+        file_content.clone(), lang.to_string(), env.config.language().to_string()
     ).await.unwrap();
 
     let file_des = structs::CodeDescription {
@@ -349,7 +349,7 @@ async fn main() {
 
             let query = args.query.clone();
             let (code_list, e_tokens) = embedding_obj.search(query.clone()).await.unwrap();
-            let mut res = client.ask(query, code_list, "中文".to_string()).await.unwrap();
+            let mut res = client.ask(query, code_list, _env.config.language()).await.unwrap();
             
             let mut lock = stdout().lock();
             while let Some(result) = res.next().await {

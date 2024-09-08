@@ -297,7 +297,7 @@ impl <'a> Embedding <'a> {
             md5: Some("".to_string()),
             code_type: Some("file".to_string()),
             lang: Some("".to_string()),
-            name: "whole project".to_string(),
+            name: "whole project summary".to_string(),
             purpose: summary,
             source_code: "".to_string(),
         }).await.unwrap()

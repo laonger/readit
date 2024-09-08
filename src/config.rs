@@ -11,6 +11,7 @@ pub struct Config {
     pub analyse_model: Option<String>,
     pub embedding_model: Option<String>,
     pub dim: Option<usize>,
+    pub language: Option<String>,
 }
 
 impl Config {
@@ -33,10 +34,19 @@ impl Config {
         self.dim.unwrap_or(265)
     }
 
+    pub fn language(&self) -> String {
+        self.language.clone().unwrap_or("".to_string())
+    }
+
     pub fn new_from_path(path: &Path) -> Self {
         let file = fs::read_to_string(path).unwrap();
         let config:Self  = serde_yml::from_str(&file).unwrap();
         config
+    }
+
+    pub fn save(&self, path: &Path) {
+        let config_string = serde_yml::to_string(&self).unwrap();
+        fs::write(path, config_string).unwrap();
     }
 
     pub fn init_config(file_path: &Path) -> Self {
@@ -47,6 +57,7 @@ impl Config {
             analyse_model   : Some("gpt-4o".to_string()),
             embedding_model : Some("text-embedding-3-large".to_string()),
             dim             : Some(256),
+            language        : Some("".to_string()),
         };
         let config_string = serde_yml::to_string(&config).unwrap();
         fs::write(file_path, config_string).unwrap();

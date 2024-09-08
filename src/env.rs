@@ -1,3 +1,4 @@
+use std::io;
 use std::fs;
 use std::env;
 use std::path::Path;
@@ -51,6 +52,22 @@ impl Env {
             config::Config::init_config(config_file.as_path());
         }
 
+        let mut config = config::Config::new_from_path(config_file.as_path());
+
+        if config.language().is_empty() {
+            println!("Please tell me, what language you speak? Default is English.");
+            println!("Language: ");
+            let mut language = String::new();
+            let _ = io::stdin().read_line(&mut language);
+            println!("\nThanks");
+            let mut language = language.replace("\n", "").replace(" ", "");
+            if language.is_empty() {
+                language = "English".to_string();
+            }
+            config.language = Some(language);
+            config.save(config_file.as_path());
+        }
+
         
         let ignore = Ignore::new_from_path(
             home_dir.join("ignore_rules.yaml").as_path()
@@ -63,7 +80,7 @@ impl Env {
             home_dir: home_dir_string,
             work_dir: work_dir_string,
             temp_dir: temp_dir.to_str().unwrap().to_string(),
-            config: config::Config::new_from_path(config_file.as_path()),
+            config,
             ignore,
             language_extensions,
         }
