@@ -233,7 +233,7 @@ async fn init(env: env::Env ) {
     }
     println!("analysing....");
     let mut job_set = JoinSet::new();
-    for (f, f_path, programming_lang, code, md5_value) in _file_list {
+    for (f, f_path, programming_lang, code, md5_value) in _file_list.clone() {
 
         println!("analyse: {:?}", f_path);
         let _env = env.clone();
@@ -256,7 +256,7 @@ async fn init(env: env::Env ) {
         seen.push(true);
     }
 
-    if seen.len() == file_list.len(){
+    if seen.len() == _file_list.len(){
         println!("Embedding Done");
 
         let client = OpenAI::new(&env);

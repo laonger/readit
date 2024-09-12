@@ -31,7 +31,8 @@ impl Config {
         self.embedding_model.clone().unwrap_or("text-embedding-3-large".to_string())
     }
     pub fn dim(&self) -> usize {
-        self.dim.unwrap_or(265)
+        //self.dim.unwrap_or(265)
+        self.dim.unwrap_or(1024)
     }
 
     pub fn language(&self) -> String {

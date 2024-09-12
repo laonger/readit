@@ -56,7 +56,7 @@ impl <'a> Embedding <'a> {
         let path = env.work_dir().join(".readit").join("db");
 
         let db = connect(path.as_path().to_str().unwrap()).execute().await?;
-        let table = Self::open_table(client, &db, env.config.dim() as i32).await?;
+        let table = Self::open_table(&db, env.config.dim() as i32).await?;
 
         Ok(Self {
             client,
@@ -98,7 +98,7 @@ impl <'a> Embedding <'a> {
             .await
     }
 
-    async fn open_table(client: &openai_utils::OpenAI, db: &Connection, dim: i32) -> Result<Table> {
+    async fn open_table(db: &Connection, dim: i32) -> Result<Table> {
 
         let table = match db.open_table("vectors").execute().await {
             Err(_) => {
@@ -163,7 +163,7 @@ impl <'a> Embedding <'a> {
                 Arc::new(content    ),
                 Arc::new(embedding_array  ),
             ],
-        ).unwrap();
+        )?;
         self.table.add(Box::new(RecordBatchIterator::new(vec![Ok(rb)], schema)))
             .execute()
             .await?;
@@ -195,14 +195,23 @@ impl <'a> Embedding <'a> {
             .collect::<Vec<f32>>()
         ;
 
+        //println!("query's embedding: {:?}", query_vector);
+
         let results = self.table.query()
             .nearest_to(query_vector)
             .unwrap()
+            .refine_factor(2)
+            .nprobes(20)
+            .limit(10)
+            ;
+        //println!("query: {:?}", results);
+        let results = results
             .execute()
             .await?
             .try_collect::<Vec<RecordBatch>>()
             .await?
         ;
+        println!("find {} answers", results.iter().len());
         let r: Vec<String> = results.iter().map(|rb| {
             let out = rb.column_by_name("content")
                 .unwrap()
@@ -211,6 +220,15 @@ impl <'a> Embedding <'a> {
                 .unwrap()
                 ;
             let text = out.iter().next().unwrap().unwrap();
+            let name = rb.column_by_name("name")
+                .unwrap()
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap()
+                ;
+            let name = name.iter().next().unwrap().unwrap();
+            //println!("name: {}", name);
+            //println!("text: {}", text);
             text.to_string()
         }).collect();
         Ok((r, tokens))
@@ -257,6 +275,7 @@ impl <'a> Embedding <'a> {
 
     pub async fn update_summary(&self) -> u32 {
         let all = self.all().await.unwrap();
+
         let all_file_des: Vec<(String, String)> = all.iter().map(|rb| {
             let file = rb.column_by_name("file")
                 .unwrap()
@@ -291,6 +310,8 @@ impl <'a> Embedding <'a> {
         ;
 
         self.table.delete("name = 'whole project'").await.unwrap();
+
+        //println!("summary: {}", summary);
 
         self.add_data(structs::CodeDescription {
             file: Some("whole project".to_string()),

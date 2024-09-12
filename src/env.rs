@@ -132,12 +132,4 @@ impl Env {
         }
     }
 
-    pub fn dim(&self) -> usize {
-        if self.config.dim() == 0 {
-            256
-        } else {
-            self.config.dim()
-        }
-    }
-
 }
