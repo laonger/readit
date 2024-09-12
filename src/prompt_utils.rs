@@ -38,3 +38,15 @@ pub fn ask_prompt(query: String, code_list: Vec<String>, language: String) -> St
 
     format!("{}\n\nMake sure all the output contents are in {}.", p, language)
 }
+
+pub fn summarize_prompt(query: String, language: String) -> String{
+    let mut env = Environment::new();
+    env.add_template("t", prompt_string::SUMMARIZE_PROJECT).unwrap();
+    let tmpl = env.get_template("t").unwrap();
+    let p = tmpl.render(context!(
+        query => query,
+    )).unwrap();
+
+    format!("{}\n\nMake sure all the output contents are in {}.", p, language)
+    
+}

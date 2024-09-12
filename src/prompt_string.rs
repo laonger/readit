@@ -131,3 +131,13 @@ Make sure the JSON output is structured as follows:
 ";
 
 ////////////////////////
+pub const SUMMARIZE_PROJECT: &str = "Here is a project summary:
+```
+{{query}}
+```
+Please provide a summary of the project in a few sentences, control the result in 8000 tokens.
+";
+
+
+
+////////////////////////

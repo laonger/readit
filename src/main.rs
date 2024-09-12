@@ -70,10 +70,11 @@ async fn embedding_file(
         source_code: file_content,
     };
 
-    let mut e_tokens = match is_update {
-        Some(true) => embedding_obj.update(file_des).await.unwrap(),
-        _ => embedding_obj.add_data(file_des).await.unwrap()
-    };
+    if is_update == Some(true) {
+        embedding_obj.delete_file(file_des.clone()).await.unwrap();
+    }
+
+    let mut e_tokens = embedding_obj.add_data(file_des).await.unwrap();
     for c in response.classes {
         //println!("c: {:?}", c);
         let data = structs::CodeDescription {
@@ -85,10 +86,7 @@ async fn embedding_file(
             purpose: c.purpose,
             source_code: c.source_code,
         };
-        e_tokens += match is_update {
-            Some(true) => embedding_obj.update(data).await.unwrap(),
-            _ => embedding_obj.add_data(data).await.unwrap()
-        };
+        e_tokens += embedding_obj.add_data(data).await.unwrap();
     };
     for c in response.functions {
         //println!("c: {:?}", c);
@@ -101,10 +99,7 @@ async fn embedding_file(
             purpose: c.purpose,
             source_code: c.source_code,
         };
-        e_tokens += match is_update {
-            Some(true) => embedding_obj.update(data).await.unwrap(),
-            _ => embedding_obj.add_data(data).await.unwrap()
-        };
+        e_tokens += embedding_obj.add_data(data).await.unwrap();
     };
     println!(
         "{}  analysing use tokens: {:?}    embedding use tokens: {:?}",
@@ -166,7 +161,7 @@ async fn force_init(env: env::Env, ) {
 
     if seen.len() == file_list.len(){
         println!("Embedding Done");
-        let tokens = embedding_obj.update_summary().await;
+        let tokens = embedding_obj.update_summary(env.config.language()).await;
         println!(
             "projedct summary embedding use tokens: {:?}",
             tokens
@@ -263,7 +258,7 @@ async fn init(env: env::Env ) {
         let embedding_obj = Embedding::new(
             &env, &client
         ).await.unwrap();
-        let tokens = embedding_obj.update_summary().await;
+        let tokens = embedding_obj.update_summary(env.config.language()).await;
 
         println!(
             "projedct summary embedding use tokens: {:?}",
@@ -356,6 +351,7 @@ async fn main() {
                 match result {
                     Ok(response) => {
                         response.choices.iter().for_each(|chat_choice| {
+                            //println!("{:?}", chat_choice);
                             if let Some(ref content) = chat_choice.delta.content {
                                 write!(lock, "{}", content).unwrap();
                             }

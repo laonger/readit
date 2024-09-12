@@ -30,9 +30,9 @@ use arrow_array::{
 use arrow_schema::{DataType, Field, Schema};
 use futures::{StreamExt, TryStreamExt};
 use lancedb::{
-    arrow::IntoArrow, connect, connection::CreateTableMode, embeddings::{
-        self, openai::OpenAIEmbeddingFunction, EmbeddingDefinition, EmbeddingFunction
-    }, query::{ExecutableQuery, QueryBase, Select}, table::Table, Connection, Result
+    connect, connection::CreateTableMode, 
+    query::{ExecutableQuery, QueryBase, Select}, table::Table,
+    Connection, Result
 };
 
 use crate::structs;
@@ -170,12 +170,20 @@ impl <'a> Embedding <'a> {
         Ok(tokens)
     }
 
-    pub async fn update(&self, data: structs::CodeDescription) -> Result<u32> {
+    pub async fn delete_file(&self, data: structs::CodeDescription) -> Result<()> {
         self.table.delete(
             format!("file = '{}'", data.file.clone().unwrap()).as_str()
         ).await?;
-        self.add_data(data).await
+        Ok(())
     }
+    
+
+    //pub async fn update(&self, data: structs::CodeDescription) -> Result<u32> {
+    //    self.table.delete(
+    //        format!("file = '{}'", data.file.clone().unwrap()).as_str()
+    //    ).await?;
+    //    self.add_data(data).await
+    //}
 
     pub async fn clean_all(&self) -> Result<()> {
         self.table.delete("md5 like '%'").await
@@ -253,6 +261,7 @@ impl <'a> Embedding <'a> {
         let results = self.table.query()
             .select(Select::All)
             .only_if(query)
+            .limit(9999)
             .execute()
             .await?
             .try_collect::<Vec<RecordBatch>>()
@@ -273,34 +282,45 @@ impl <'a> Embedding <'a> {
         Ok(results)
     }
 
-    pub async fn update_summary(&self) -> u32 {
+    pub async fn update_summary(&self, language: String) -> u32 {
+        self.table.delete("file = 'whole project'").await.unwrap();
         let all = self.all().await.unwrap();
 
-        let all_file_des: Vec<(String, String)> = all.iter().map(|rb| {
-            let file = rb.column_by_name("file")
-                .unwrap()
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap()
-                .unwrap()
-                .to_string()
-            ;
-            let purpose = rb.column_by_name("purpose")
-                .unwrap()
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap()
-                .unwrap()
-                .to_string()
-            ;
-            (file, purpose)
-        }).collect();
+        //let all = self.search_other(
+        //    "code_type".to_string(),
+        //    "file".to_string(),
+        //).await.unwrap();
+
+        let mut all_file_des: Vec<(String, String)> = all
+            .iter()
+            .map(|rb| {
+                let file = rb.column_by_name("file")
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .to_string()
+                ;
+                let purpose = rb.column_by_name("purpose")
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .to_string()
+                ;
+                (file, purpose)
+            })
+            .collect()
+        ;
+        all_file_des.sort_by_key(|x| x.0.clone());
 
         let summary = all_file_des
             .iter()
@@ -309,9 +329,10 @@ impl <'a> Embedding <'a> {
             .join("\n")
         ;
 
-        self.table.delete("name = 'whole project'").await.unwrap();
-
         //println!("summary: {}", summary);
+        let (summary, t) = self.client.summarize(summary, language).await.unwrap();
+        println!("summarize token usege: {}", t);
+        //println!("summary2: {}", summary);
 
         self.add_data(structs::CodeDescription {
             file: Some("whole project".to_string()),

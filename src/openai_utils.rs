@@ -299,4 +299,44 @@ impl OpenAI {
 
         Ok((builder.finish(), tokens))
     }
+
+    pub async fn summarize(&self, query: String, language: String) 
+    -> Result<(String, u32), OpenAIError> 
+    {
+        let prompt = prompt_utils::summarize_prompt(
+            query, language
+        );
+
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(&self.chat_model)
+            .stream(false)
+            .response_format(
+                ChatCompletionResponseFormat {
+                    r#type: ChatCompletionResponseFormatType::Text
+                }
+            )
+            .messages([
+                ChatCompletionRequestSystemMessageArgs::default()
+                    .content("You are a helpful assistant.")
+                    .build()?
+                    .into(),
+                ChatCompletionRequestUserMessageArgs::default()
+                    .content(prompt)
+                    .build()?
+                    .into(),
+            ])
+            .build()?;
+
+        let response = self.client.chat().create(request).await?;
+        //println!("{:?}", response);
+        let tokens = match response.usage {
+            None => 0,
+            Some(ref u) => {
+                u.total_tokens
+            }
+        };
+        let text = response.choices[0].clone().message.content.unwrap();
+        let text = html_escape::decode_html_entities(&text).to_string();
+        Ok((text, tokens))
+    }
 }
