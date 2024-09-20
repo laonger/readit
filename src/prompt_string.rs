@@ -25,7 +25,7 @@ Make sure the JSON output is structured as follows:
 }
 ```
 
-This JSON output will help us understand the structure and functionality of the source code file in a clear and concise manner, So PLEASE give me a JSON data follow above structure.
+This JSON output will help us understand the structure and functionality of the source code file in a clear and concise manner, So PLEASE give me a JSON data follow above structure, and MAKE SURE the JSON data is VALID.
 ";
 
 ////////////////////////
@@ -64,8 +64,6 @@ Make sure the JSON output is structured as follows:
   \"classes\": [
     {
       \"name\": \"string\", // this class's name
-      \"start\": \"int\", // where this class is start
-      \"end\": \"int\", // where this class is end
       \"source_code\": \"string\", // this class's raw content
       \"purpose\": \"string\" // what this class is doing
     }
@@ -73,7 +71,6 @@ Make sure the JSON output is structured as follows:
   \"functions\": [
     {
       \"name\": \"string\", // this function's name
-      \"class\": \"string\", // what class this function is in
       \"source_code\": \"string\", // this function's raw content
       \"purpose\": \"string\" // what this function is doing
     }
@@ -81,7 +78,7 @@ Make sure the JSON output is structured as follows:
 }
 ```
 
-This JSON output will help us understand the structure and functionality of the source code file in a clear and concise manner, So PLEASE give me a JSON data follow above structure.
+This JSON output will help us understand the structure and functionality of the source code file in a clear and concise manner, So PLEASE give me a JSON data follow above structure, and MAKE SURE the JSON data is VALID.
 ";
 
 

@@ -117,10 +117,14 @@ impl OpenAI {
             let code_description: structs::GPTResponse = match serde_json::from_str(&text){
                 Ok(c) => c,
                 Err(_) => {
-                    n += 1;
-                    if n >= 3 {
-                        panic!("Failed to parse response from OpenAI")
+                    for l in text.split("\n") {
+                        println!("{}", l);
                     }
+                    panic!("Failed to parse response from OpenAI");
+                    //n += 1;
+                    //if n >= 3 {
+                    //    panic!("Failed to parse response from OpenAI: {:?}", text);
+                    //}
                     continue;
                 }
             };
