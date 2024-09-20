@@ -39,6 +39,7 @@ use async_openai::error::OpenAIError;
 
 use lancedb::{
     connect, connection::CreateTableMode, 
+    DistanceType,
     query::{ExecutableQuery, QueryBase, Select}, table::Table,
     Connection, Result
 };
@@ -279,6 +280,7 @@ impl <'a> Embedding <'a> {
         let results = self.table.query()
             .nearest_to(query_vector)
             .unwrap()
+            .distance_type(DistanceType::L2)  // dot和cosine都相当歪
             //.refine_factor(2)
             //.nprobes(20)
             .limit(10)
