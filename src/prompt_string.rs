@@ -64,6 +64,8 @@ Make sure the JSON output is structured as follows:
   \"classes\": [
     {
       \"name\": \"string\", // this class's name
+      \"start\": \"int\", // where this class is start
+      \"end\": \"int\", // where this class is end
       \"source_code\": \"string\", // this class's raw content
       \"purpose\": \"string\" // what this class is doing
     }
@@ -71,6 +73,7 @@ Make sure the JSON output is structured as follows:
   \"functions\": [
     {
       \"name\": \"string\", // this function's name
+      \"class\": \"string\", // what class this function is in
       \"source_code\": \"string\", // this function's raw content
       \"purpose\": \"string\" // what this function is doing
     }

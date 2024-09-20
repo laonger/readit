@@ -126,6 +126,8 @@ impl OpenAI {
             };
             break code_description
         };
+        //println!("code_description: {:?}", code_description);
+        //assert!(tokens < 0, "No tokens used in response");
 
         Ok((code_description, tokens))
     }

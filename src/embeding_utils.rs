@@ -18,17 +18,25 @@ use arrow_array::{
     },
     types::Float32Type,
     FixedSizeListArray,
+    PrimitiveArray,
     Float32Array,
     Int32Array,
     RecordBatch,
     RecordBatchIterator,
     StringArray,
-    builder::FixedSizeListBuilder,
+    builder::{
+        FixedSizeListBuilder,
+        PrimitiveBuilder,
+    },
 };
 
 
 use arrow_schema::{DataType, Field, Schema};
+
 use futures::{StreamExt, TryStreamExt};
+
+use async_openai::error::OpenAIError;
+
 use lancedb::{
     connect, connection::CreateTableMode, 
     query::{ExecutableQuery, QueryBase, Select}, table::Table,
@@ -41,7 +49,11 @@ use crate::openai_utils;
 
 use crate::env;
 
+use crate::pooling;
+
 const TABLE_NAME: &str = &"vectors";
+
+const MAX_TOKENS: usize = 8192;
 
 pub struct Embedding <'a> {
     client: &'a openai_utils::OpenAI,
@@ -112,6 +124,67 @@ impl <'a> Embedding <'a> {
         Ok(table)
     }
 
+    fn split_string(&self, s: String) -> Vec<String> {
+        let mut r: Vec<String> = Vec::new();
+        let mut sum = 0;
+        let mut rr: Vec<String> = Vec::new();
+        for l in s.split("\n") {
+            if l.len() + sum < MAX_TOKENS{
+                rr.push(l.to_string());
+                sum += l.len();
+            } else {
+                r.push(rr.join("\n").to_string());
+                sum = 0;
+                rr = Vec::new();
+            }
+            
+        };
+        r
+    }
+
+    async fn embedding_compute(&self, query: String)
+        -> Result<(Float32Array, u32)> 
+    {
+        let (embedding, tokens) = match self.client.embedding_compute(
+                Arc::new(StringArray::from_iter_values(once(query.clone())))
+            ).await
+        {
+            Ok((e, t)) => (e, t),
+            Err(e) => {
+                match e {
+                    OpenAIError::ApiError(ref ee) => {
+                        if ee.message.contains(
+                            "This model's maximum context length "
+                        ) {
+                            let string_list = self.split_string(query);
+                            let mut _e_all_builder = PrimitiveBuilder::<Float32Type>::new();
+                            let mut token = 0;
+                            for s in string_list.iter() {
+                                let (e, t) = self.client.embedding_compute(
+                                    Arc::new(StringArray::from_iter_values(once(s.clone())))
+                                ).await.unwrap();
+                                token += t;
+                                for e in e.iter() {
+                                    _e_all_builder.append_value(e.unwrap());
+                                }
+                            };
+                            let _e_all = _e_all_builder.finish();
+                            (pooling::pooling(self.dim, &_e_all), token)
+                        } else {
+                            panic!("embedding error, {:?}", e);
+                        }
+                    },
+                    _ => {
+                        panic!("embedding error, {:?}", e);
+                    }
+                }
+                //println!("embedding error: {:?}", e);
+                //panic!("embedding error, {:?}", e);
+            }
+        };
+        Ok((embedding, tokens))
+    }
+      
     pub async fn add_data(&self, data: structs::CodeDescription) -> Result<u32> {
 
         let schema = Self::get_schema(self.dim as i32);
@@ -135,9 +208,7 @@ impl <'a> Embedding <'a> {
 
         let content = StringArray::from_iter_values(vec![content_string.to_string()]);
 
-        let (embedding, tokens) = self.client.embedding_compute(
-                Arc::new(StringArray::from_iter_values(once(content_string)))
-        ).await.unwrap();
+        let (embedding, tokens) = self.embedding_compute(content_string).await?;
 
         let float_builder = Float32Array::builder(self.dim);
         let mut fixed_size_list_builder = FixedSizeListBuilder::new(float_builder, self.dim as i32);  // 每个子数组长度为 3
@@ -208,10 +279,12 @@ impl <'a> Embedding <'a> {
         let results = self.table.query()
             .nearest_to(query_vector)
             .unwrap()
-            .refine_factor(2)
-            .nprobes(20)
+            //.refine_factor(2)
+            //.nprobes(20)
             .limit(10)
             ;
+        //let s = results.explain_plan(true).await.unwrap();
+        //println!("explain: {}", s);
         //println!("query: {:?}", results);
         let results = results
             .execute()
@@ -234,7 +307,7 @@ impl <'a> Embedding <'a> {
                 .downcast_ref::<StringArray>()
                 .unwrap()
                 ;
-            let name = name.iter().next().unwrap().unwrap();
+            //let name = name.iter().next().unwrap().unwrap();
             //println!("name: {}", name);
             //println!("text: {}", text);
             text.to_string()

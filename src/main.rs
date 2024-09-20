@@ -27,6 +27,8 @@ mod file_utils;
 mod prompt_string;
 mod prompt_utils;
 
+mod pooling;
+
 mod embeding_utils;
 use embeding_utils::Embedding;
 
