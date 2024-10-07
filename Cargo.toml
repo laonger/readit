@@ -12,6 +12,8 @@ arrow-schema = "52.2.0"
 async-openai = "0.23.4"
 async-std = { version = "1.12.0", features = ["attributes"] }
 clap = { version = "4.5.16", features = ["derive"] }
+color-eyre = "0.6.3"
+crossterm = "0.28.1"
 futures = "0.3.30"
 home = "0.5.9"
 html-escape = "0.2.13"
@@ -19,7 +21,9 @@ lancedb = { version = "0.10.0", features = ["openai"]}
 lzma-sys = { version = "0.1.20", features = ["static"] }
 md5 = "0.7.0"
 minijinja = "2.2.0"
+ratatui = "0.28.1"
 serde = { version = "1.0.209", features = ["derive"] }
 serde_json = "1.0.127"
 serde_yml = "0.0.12"
 tokio = { version = "1.39.3", features = ["macros"] }
+tui-textarea = "0.6.1"

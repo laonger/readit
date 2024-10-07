@@ -274,28 +274,16 @@ impl OpenAI {
             user: None,
             dimensions: Some(self.dim),
         };
-        //println!("embedding_compute: {:?}", req);
-
-        // TODO: request batching and retry logic
-        //task::block_in_place(move || {
-        //    Handle::current().block_on(async {
-        //        let mut builder = Float32Builder::new();
-
-        //        let res = embed.create(req).await?;
-
-        //        let tokens = res.usage.prompt_tokens;
-
-        //        for Embedding { embedding, .. } in res.data.iter() {
-        //            builder.append_slice(embedding);
-        //        }
-
-        //        Ok((builder.finish(), tokens))
-        //    })
-        //})
 
         let mut builder = Float32Builder::new();
 
-        let res = embed.create(req).await?;
+        let res = match embed.create(req).await {
+            Ok(r) => r,
+            Err(e) => {
+                println!("Embedding Error, check API_KEY and BASE_URL config.");
+                return Err(e);
+            }
+        };
 
         let tokens = res.usage.prompt_tokens;
 

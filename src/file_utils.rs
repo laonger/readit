@@ -130,6 +130,10 @@ pub fn home_dir() -> (String, bool) {
     )
 }
 
+pub fn create_dir(_dir: &Path) {
+    fs::create_dir(_dir).unwrap();
+}
+
 pub fn init_home(
     home_dir: &String,
 ) {
@@ -156,13 +160,7 @@ pub fn init_home(
     };
 }
 
-pub fn init_workdir() -> String {
-
-    let _work_dir_p = env::current_dir().unwrap();
-    let work_dir = _work_dir_p.as_path();
-    let _work_dir = work_dir.join(".readit");
-    if !_work_dir.exists() {
-        fs::create_dir(_work_dir).unwrap();
-    };
-    work_dir.to_str().unwrap().to_string()
+pub fn get_workdir() -> String {
+    env::current_dir().unwrap().as_path()
+        .to_str().unwrap().to_string()
 }

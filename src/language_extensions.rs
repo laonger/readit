@@ -121,6 +121,7 @@ pub type FileExtensionTypeMap = HashMap<String, String>;
 #[derive(Debug, Clone)]
 pub struct LanguageExtensions {
     pub ext_list: FileExtensionList,
+    pub type_ext_map: HashMap<String, Vec<String>>,
     pub ext_type_map: FileExtensionTypeMap,
 }
 
@@ -141,6 +142,7 @@ impl LanguageExtensions  {
         };
         Self {
             ext_list: file_extension_map.clone().into_keys().collect::<FileExtensionList>(),
+            type_ext_map: _file_extension,
             ext_type_map: file_extension_map
         }
     }
@@ -151,18 +153,7 @@ impl LanguageExtensions  {
     }
     
     pub fn write_to_file(&self, path: &Path) {
-        let mut o: HashMap<String, Vec<String>> = HashMap::new();
-        self.ext_type_map.values().map(|x| {
-            let v = self.ext_type_map.get(x).unwrap().clone();
-            o
-                .entry(x.clone())
-                .and_modify(|e|{
-                    e.push(v.clone());
-                })
-                .or_insert(vec![v])
-            ;
-        });
-        let ignore_string = serde_yml::to_string(&o).unwrap();
+        let ignore_string = serde_yml::to_string(&self.type_ext_map).unwrap();
         fs::write(path, ignore_string).unwrap();
     }
 

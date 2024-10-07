@@ -36,3 +36,16 @@ pub struct GPTCodeSplitResponse {
     pub functions: Vec<CodeSplit>,
 }
 
+
+#[derive(Debug, Clone)]
+pub enum InitStep {
+    InitHome,
+    //SetMainLanguage,
+    MakeIgnoreFile,
+    MakeLanguageExtensionsFile,
+    AskMainLanguage,
+    AskApiKey,
+    SetApiKey,
+    InitWorkDir,
+    EmbeddingFiles(Vec<String>),
+}

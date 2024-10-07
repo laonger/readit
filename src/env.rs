@@ -27,62 +27,25 @@ pub struct Env {
 impl Env {
     pub fn new(path: Option<String>) -> Self {
 
-        let (home_dir_string, home_exist) = file_utils::home_dir();
-        if !home_exist {
-            file_utils::init_home(&home_dir_string);
-        }
-        let home_dir = Path::new(&home_dir_string);
-
         let work_dir_string = match path {
             Some(p) => {
                 p
             },
             None => {
-                file_utils::init_workdir()
+                file_utils::get_workdir()
             }
         };
         let work_dir = Path::new(&work_dir_string);
-        
         let temp_dir = work_dir.join(".readit");
-        
-        let config_file = home_dir.join("config.yaml");
 
-        // TODO 挪出去
-        if !config_file.exists() {
-            config::Config::init_config(config_file.as_path());
-        }
-
-        let mut config = config::Config::new_from_path(config_file.as_path());
-
-        if config.language().is_empty() {
-            println!("Please tell me, what language you speak? Default is English.");
-            println!("Language: ");
-            let mut language = String::new();
-            let _ = io::stdin().read_line(&mut language);
-            println!("\nThanks");
-            let mut language = language.replace("\n", "").replace(" ", "");
-            if language.is_empty() {
-                language = "English".to_string();
-            }
-            config.language = Some(language);
-            config.save(config_file.as_path());
-        }
-
-        
-        let ignore = Ignore::new_from_path(
-            home_dir.join("ignore_rules.yaml").as_path()
-        );
-        let language_extensions = LanguageExtensions::new_from_path(
-            home_dir.join("language_extensions.yaml").as_path()
-        );
 
         Self {
-            home_dir: home_dir_string,
+            home_dir: String::from(""),
             work_dir: work_dir_string,
             temp_dir: temp_dir.to_str().unwrap().to_string(),
-            config,
-            ignore,
-            language_extensions,
+            config  : config::Config::new(),
+            ignore  : Ignore::new(),
+            language_extensions: LanguageExtensions::new(),
         }
     }
 
@@ -119,6 +82,7 @@ impl Env {
         }
     }
 
+    // TODO
     pub fn openai_base(&self) -> String {
         match env::var("OPENAI_BASE") {
             Ok(val) => val,

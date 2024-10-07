@@ -12,11 +12,34 @@ pub struct Config {
     pub embedding_model: Option<String>,
     pub dim: Option<usize>,
     pub language: Option<String>,
+    file_path: Option<String>,
 }
 
 impl Config {
+    pub fn new() -> Self{
+        Self {
+            openai_key      : None,
+            openai_base     : None,
+            chat_model      : None,
+            analyse_model   : None,
+            embedding_model : None,
+            dim             : None,
+            language        : None,
+            file_path       : None,
+        }
+        
+    }
+    pub fn new_from_path(path: &Path) -> Self {
+        let file = fs::read_to_string(path).unwrap();
+        let config:Self  = serde_yml::from_str(&file).unwrap();
+        config
+    }
+
     pub fn openai_key(&self) -> String {
-        self.openai_key.clone().unwrap()
+        match self.openai_key.clone() {
+            Some(v) => v,
+            None => String::from("")
+        }
     }
     pub fn openai_base(&self) -> String {
         self.openai_base.clone().unwrap_or("https://api.openai.com/v1".to_string())
@@ -39,13 +62,14 @@ impl Config {
         self.language.clone().unwrap_or("".to_string())
     }
 
-    pub fn new_from_path(path: &Path) -> Self {
-        let file = fs::read_to_string(path).unwrap();
-        let config:Self  = serde_yml::from_str(&file).unwrap();
-        config
+    pub fn api_key(&self) -> String {
+        self.openai_key.clone().unwrap()
     }
 
-    pub fn save(&self, path: &Path) {
+
+    pub fn save(&self) {
+        let file_path_string = self.file_path.clone().unwrap();
+        let path = Path::new(&file_path_string);
         let config_string = serde_yml::to_string(&self).unwrap();
         fs::write(path, config_string).unwrap();
     }
@@ -57,8 +81,9 @@ impl Config {
             chat_model      : Some("gpt-4o".to_string()),
             analyse_model   : Some("gpt-4o".to_string()),
             embedding_model : Some("text-embedding-3-large".to_string()),
-            dim             : Some(256),
+            dim             : Some(1024),
             language        : Some("".to_string()),
+            file_path       : Some(file_path.to_str().unwrap().to_string()),
         };
         let config_string = serde_yml::to_string(&config).unwrap();
         fs::write(file_path, config_string).unwrap();
