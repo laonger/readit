@@ -2,6 +2,7 @@ use std::io;
 
 use crate::{
     config::Config,
+    controler,
     env::Env,
     file_utils,
     ignore_rules::Ignore,
@@ -110,3 +111,6 @@ pub fn init(_env: &mut Env, init_step: Vec<InitStep>) -> &Env{
     _env
 }
 
+pub async fn ask(_env: Env, query: String) {
+    controler::ask(_env, query).await;
+}

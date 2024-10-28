@@ -4,8 +4,12 @@ use std::path::{Path, PathBuf};
 use std::io::{stdout, Write, Read};
 use futures::{Future, StreamExt};
 //use std::env as std_env;
+use std::sync::{Arc, Mutex};
 
 use std::env as std_env;
+
+use env_logger::Builder;
+
 
 use clap::{
     Parser,
@@ -20,6 +24,8 @@ use md5;
 use tokio;
 use tokio::task::JoinSet;
 use tokio::{runtime::Handle, task};
+
+mod errors;
 
 mod openai_utils;
 use openai_utils::OpenAI;
@@ -48,6 +54,22 @@ mod controler;
 
 mod cli;
 mod tui;
+
+fn log_init() {
+    let file = File::create("app.log").expect("Failed to create log file");
+    let file = Mutex::new(file); // 使用 Mutex 保证线程安全
+
+    // 初始化 env_logger 并设置输出目标
+    Builder::new()
+        .format(move |buf, record| {
+            let mut file = file.lock().unwrap();
+            writeln!(file, "{} - {}", record.level(), record.args())
+            //writeln!(buf, "{} - {}", record.level(), record.args()) // 同时输出到控制台
+        })
+        .filter_level(log::LevelFilter::Info) // 设置日志级别
+        .init();
+}
+
 
 
 /// Simple program to greet a person
@@ -163,6 +185,8 @@ fn check_and_load_env(path: Option<String>) -> (Vec<InitStep>, env::Env){
 #[tokio::main]
 async fn main() {
 
+    log_init();
+
     let command = Cli::parse();
     //println!("{:?}", command);
     //
@@ -192,12 +216,12 @@ async fn main() {
 
             let query = args.query.clone();
 
-            controler::ask(_env, query).await;
+            cli::ask(_env, query).await;
             //println!("{}", res);
             //println!("tokens usage: {:?}", a_tokens+e_tokens);
         },
         None => {
-            tui::run_ui();
+            tui::run_ui(_env).await;
         }
     };
 }

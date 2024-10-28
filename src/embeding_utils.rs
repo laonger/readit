@@ -1,6 +1,9 @@
-use tokio;
 use std::{iter::once, sync::Arc};
 use std::path::{Path, PathBuf};
+
+use log::{info, warn, error};
+
+use tokio;
 
 use arrow::{
     buffer::Buffer,
@@ -41,8 +44,10 @@ use lancedb::{
     connect, connection::CreateTableMode, 
     DistanceType,
     query::{ExecutableQuery, QueryBase, Select}, table::Table,
-    Connection, Result
+    Connection
 };
+
+use crate::errors::Result;
 
 use crate::structs;
 
@@ -105,10 +110,11 @@ impl <'a> Embedding <'a> {
 
     async fn init_table(db: &Connection, dim:i32) -> Result<Table>{
         let schema = Self::get_schema(dim);
-        db.create_empty_table(TABLE_NAME, schema)
+        Ok(db.create_empty_table(TABLE_NAME, schema)
             .mode(CreateTableMode::Overwrite)
             .execute()
-            .await
+            .await?
+        )
     }
 
     async fn open_table(db: &Connection, dim: i32) -> Result<Table> {
@@ -163,7 +169,7 @@ impl <'a> Embedding <'a> {
                             for s in string_list.iter() {
                                 let (e, t) = self.client.embedding_compute(
                                     Arc::new(StringArray::from_iter_values(once(s.clone())))
-                                ).await.unwrap();
+                                ).await?;
                                 token += t;
                                 for e in e.iter() {
                                     _e_all_builder.append_value(e.unwrap());
@@ -258,16 +264,14 @@ impl <'a> Embedding <'a> {
     //}
 
     pub async fn clean_all(&self) -> Result<()> {
-        self.table.delete("md5 like '%'").await
+        Ok(self.table.delete("md5 like '%'").await?)
     }
 
     pub async fn search(&self, prompt: String) -> Result<(Vec<String>, u32)> {
 
         let query = Arc::new(StringArray::from_iter_values(once(prompt)));
 
-        let (query_vector, tokens) = self.client.embedding_compute(query)
-            .await
-            .unwrap()
+        let (query_vector, tokens) = self.client.embedding_compute(query).await?
         ;
         let query_vector = query_vector
             .iter()
@@ -278,8 +282,7 @@ impl <'a> Embedding <'a> {
         //println!("query's embedding: {:?}", query_vector);
 
         let results = self.table.query()
-            .nearest_to(query_vector)
-            .unwrap()
+            .nearest_to(query_vector)?
             .distance_type(DistanceType::L2)  // dot和cosine都相当歪
             //.refine_factor(2)
             //.nprobes(20)
@@ -294,14 +297,12 @@ impl <'a> Embedding <'a> {
             .try_collect::<Vec<RecordBatch>>()
             .await?
         ;
-        println!("find {} answers", results.iter().len());
+        info!("find {} answers", results.iter().len());
         let r: Vec<String> = results.iter().map(|rb| {
             let out = rb.column_by_name("content")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>())
                 .unwrap()
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .unwrap()
-                ;
+            ;
             let text = out.iter().next().unwrap().unwrap();
             let name = rb.column_by_name("name")
                 .unwrap()
@@ -349,17 +350,17 @@ impl <'a> Embedding <'a> {
         let results = self.table.query()
             .select(Select::All)
             .execute()
-            .await.unwrap();
+            .await?;
         let results = results
             .try_collect::<Vec<RecordBatch>>()
-            .await.unwrap()
+            .await?
         ;
         Ok(results)
     }
 
-    pub async fn update_summary(&self, language: String) -> u32 {
-        self.table.delete("file = 'whole project'").await.unwrap();
-        let all = self.all().await.unwrap();
+    pub async fn update_summary(&self, language: String) -> Result<u32> {
+        self.table.delete("file = 'whole project'").await?;
+        let all = self.all().await?;
 
         //let all = self.search_other(
         //    "code_type".to_string(),
@@ -405,7 +406,7 @@ impl <'a> Embedding <'a> {
         ;
 
         //println!("summary: {}", summary);
-        let (summary, t) = self.client.summarize(summary, language).await.unwrap();
+        let (summary, t) = self.client.summarize(summary, language).await?;
         println!("summarize token usege: {}", t);
         //println!("summary2: {}", summary);
 
@@ -417,6 +418,6 @@ impl <'a> Embedding <'a> {
             name: "whole project summary".to_string(),
             purpose: summary,
             source_code: "".to_string(),
-        }).await.unwrap()
+        }).await
     }
 }

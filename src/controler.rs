@@ -21,6 +21,8 @@ use tokio;
 use tokio::task::JoinSet;
 use tokio::{runtime::Handle, task};
 
+use crate::errors::Result;
+
 use crate::openai_utils::OpenAI;
 use crate::file_utils;
 use crate::prompt_utils;
@@ -103,16 +105,16 @@ pub async fn embedding_file(
     );
 }
 
-pub async fn force_init(env: env::Env, ) {
+pub async fn force_init(env: env::Env, ) -> Result<()> {
 
     let path = env.work_dir();
 
     let client = OpenAI::new(&env);
     let embedding_obj = Embedding::new(
         &env, &client
-    ).await.unwrap();
+    ).await?;
 
-    embedding_obj.clean_all().await.unwrap();
+    embedding_obj.clean_all().await?;
 
     let mut file_list: Vec<(PathBuf, String)> = Vec::new();
     file_utils::list_path(
@@ -157,20 +159,21 @@ pub async fn force_init(env: env::Env, ) {
 
     if seen.len() == file_list.len(){
         println!("Embedding Done");
-        let tokens = embedding_obj.update_summary(env.config.language()).await;
+        let tokens = embedding_obj.update_summary(env.config.language()).await?;
         println!(
             "projedct summary embedding use tokens: {:?}",
             tokens
         );
     };
+    Ok(())
 }
 
-pub async fn init(env: env::Env ) {
+pub async fn init(env: env::Env ) -> Result<()> {
 
     let client = OpenAI::new(&env);
     let embedding_obj = Embedding::new(
         &env, &client
-    ).await.unwrap();
+    ).await?;
 
     let path = env.work_dir();
 
@@ -192,7 +195,7 @@ pub async fn init(env: env::Env ) {
 
         let md5_value = format!("{:x}", md5::compute(code.clone()));
 
-        if embedding_obj.is_file_change(&f_path, &md5_value).await.unwrap() {
+        if embedding_obj.is_file_change(&f_path, &md5_value).await? {
             _file_list.push((
                 f.clone(),
                 f_path.clone(),
@@ -204,7 +207,7 @@ pub async fn init(env: env::Env ) {
     };
 
     if _file_list.is_empty() {
-        return
+        return Ok(())
     }
 
     println!("these files is changed, would you want to re-embedding them?");
@@ -220,7 +223,7 @@ pub async fn init(env: env::Env ) {
     y_n = y_n.replace("\n", "").replace(" ", "").replace("\r", "");
     if y_n == "No".to_string() || y_n == "no" {
         println!("....");
-        return
+        return Ok(())
     }
     println!("analysing....");
     let mut job_set = JoinSet::new();
@@ -253,34 +256,34 @@ pub async fn init(env: env::Env ) {
         let client = OpenAI::new(&env);
         let embedding_obj = Embedding::new(
             &env, &client
-        ).await.unwrap();
+        ).await?;
         let tokens = embedding_obj.update_summary(env.config.language()).await;
 
         println!(
-            "projedct summary embedding use tokens: {:?}",
+            "project summary embedding use tokens: {:?}",
             tokens
         );
     }
 
     println!("Embedding Done");
-    
+    Ok(())
 }
 
-pub async fn ask(_env: env::Env, query: String) {
+pub async fn ask(_env: env::Env, query: String, ) -> Result<()>{
     let client = OpenAI::new(&_env);
 
     if _env.is_new_project() {
         println!("Please run init command first, you can run \"readit -h \" for help.");
-        return
+        return Ok(())
     }
 
     let embedding_obj = Embedding::new(
         &_env, &client
-    ).await.unwrap();
+    ).await?;
 
-    let (code_list, e_tokens) = embedding_obj.search(query.clone()).await.unwrap();
+    let (code_list, e_tokens) = embedding_obj.search(query.clone()).await?;
 
-    let mut res = client.ask(query, code_list, _env.config.language()).await.unwrap();
+    let mut res = client.ask(query, code_list, _env.config.language()).await?;
     
     let mut lock = stdout().lock();
     while let Some(result) = res.next().await {
@@ -298,6 +301,7 @@ pub async fn ask(_env: env::Env, query: String) {
             }
         }
         stdout().flush().unwrap();
-    }
+    };
+    Ok(())
 }
 
