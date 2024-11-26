@@ -1,29 +1,12 @@
 use std::{iter::once, sync::Arc};
-use std::path::{Path, PathBuf};
 
-use log::{info, warn, error};
+use log::info;
 
-use tokio;
 
-use arrow::{
-    buffer::Buffer,
-    array::{
-        Float32Builder,
-        ArrayData,
-        Array,
-        ListArray,
-    }
-};
+use arrow::array::Array;
 use arrow_array::{
-    cast::{
-        as_map_array,
-        AsArray
-    },
     types::Float32Type,
-    FixedSizeListArray,
-    PrimitiveArray,
     Float32Array,
-    Int32Array,
     RecordBatch,
     RecordBatchIterator,
     StringArray,

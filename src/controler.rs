@@ -1,38 +1,24 @@
 use std::io;
 use std::fs::File;
-use std::env as std_env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::io::{stdout, Write, Read};
-use std::collections::HashMap;
-use futures::{Future, StreamExt};
+use futures::StreamExt;
 //use std::env as std_env;
 
-use clap::{
-    Parser,
-    Args,
-    Subcommand,
-    Command,
-
-};
+use log::info;
 
 use md5;
 
 use tokio;
 use tokio::task::JoinSet;
-use tokio::{runtime::Handle, task};
 
 use crate::errors::Result;
 
 use crate::openai_utils::OpenAI;
 use crate::file_utils;
-use crate::prompt_utils;
-use crate::pooling;
 use crate::embeding_utils::Embedding;
 use crate::structs;
-use crate::ignore_rules;
-use crate::language_extensions;
 use crate::env;
-use crate::config;
 
 
 
@@ -269,7 +255,7 @@ pub async fn init(env: env::Env ) -> Result<()> {
     Ok(())
 }
 
-pub async fn ask(_env: env::Env, query: String, ) -> Result<()>{
+pub async fn ask(mut _env: env::Env, query: String, ) -> Result<()>{
     let client = OpenAI::new(&_env);
 
     if _env.is_new_project() {
@@ -283,7 +269,7 @@ pub async fn ask(_env: env::Env, query: String, ) -> Result<()>{
 
     let (code_list, e_tokens) = embedding_obj.search(query.clone()).await?;
 
-    let mut res = client.ask(query, code_list, _env.config.language()).await?;
+    let (_, mut res) = client.ask(query, code_list).await?;
     
     let mut lock = stdout().lock();
     while let Some(result) = res.next().await {

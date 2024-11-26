@@ -1,10 +1,9 @@
-use std::io;
 use std::fs::File;
-use std::path::{Path, PathBuf};
-use std::io::{stdout, Write, Read};
-use futures::{Future, StreamExt};
+use std::path::Path;
+use std::io::Write;
+use futures::StreamExt;
 //use std::env as std_env;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use std::env as std_env;
 
@@ -15,20 +14,18 @@ use clap::{
     Parser,
     Args,
     Subcommand,
-    Command,
 
 };
 
-use md5;
 
 use tokio;
-use tokio::task::JoinSet;
-use tokio::{runtime::Handle, task};
+
+mod init;
+use init::InitStep;
 
 mod errors;
 
 mod openai_utils;
-use openai_utils::OpenAI;
 
 mod file_utils;
 
@@ -38,10 +35,8 @@ mod prompt_utils;
 mod pooling;
 
 mod embeding_utils;
-use embeding_utils::Embedding;
 
 mod structs;
-use structs::InitStep;
 
 mod ignore_rules;
 mod language_extensions;
@@ -52,11 +47,13 @@ mod config;
 
 mod controler;
 
+mod history;
+
 mod cli;
 mod tui;
 
-fn log_init() {
-    let file = File::create("app.log").expect("Failed to create log file");
+fn log_init(path: &Path) {
+    let file = File::create(path.join("log")).expect("Failed to create log file");
     let file = Mutex::new(file); // 使用 Mutex 保证线程安全
 
     // 初始化 env_logger 并设置输出目标
@@ -115,7 +112,13 @@ fn check_and_load_env(path: Option<String>) -> (Vec<InitStep>, env::Env){
     let mut _env = env::Env::new(path.clone());
     let mut init_steps: Vec<InitStep> = Vec::new();
 
-    let (home_dir_string, home_exist) = file_utils::home_dir();
+    let (home_dir, home_dir_string, home_exist) = file_utils::home_dir();
+
+    if !home_exist {
+        file_utils::create_dir(home_dir.as_path());
+    }
+
+    log_init(home_dir.as_path());
 
     //let mut has_api_key = false;
 
@@ -127,8 +130,6 @@ fn check_and_load_env(path: Option<String>) -> (Vec<InitStep>, env::Env){
             false
         }
     };
-
-    let home_dir = Path::new(&home_dir_string);
     
     if !home_exist {
         //file_utils::init_home(&home_dir_string);
@@ -177,6 +178,8 @@ fn check_and_load_env(path: Option<String>) -> (Vec<InitStep>, env::Env){
         init_steps.push(InitStep::InitWorkDir);
     };
 
+    init_steps.push(InitStep::Embedding);
+
     //env.check_openai_key;
     (init_steps, _env)
 }
@@ -185,11 +188,8 @@ fn check_and_load_env(path: Option<String>) -> (Vec<InitStep>, env::Env){
 #[tokio::main]
 async fn main() {
 
-    log_init();
 
     let command = Cli::parse();
-    //println!("{:?}", command);
-    //
 
     let path = command.path;
 
@@ -203,22 +203,18 @@ async fn main() {
 
     let (init_steps, mut _env) = check_and_load_env(path.clone());
     //println!("steps: {:?}", init_steps);
+    //
+    let _ = cli::init(&mut _env, init_steps).await;
 
     match command.command {
         Some(Commands::Init) => {
-            controler::force_init(_env).await;
+            let _ = controler::force_init(_env).await;
         },
         Some(Commands::Ask(args)) => {
             
-            //controler::init(_env.clone()).await;
-
-            cli::init(&mut _env, init_steps);
-
             let query = args.query.clone();
 
             cli::ask(_env, query).await;
-            //println!("{}", res);
-            //println!("tokens usage: {:?}", a_tokens+e_tokens);
         },
         None => {
             tui::run_ui(_env).await;

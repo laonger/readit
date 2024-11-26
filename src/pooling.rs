@@ -4,7 +4,6 @@ use arrow_array::{
     PrimitiveArray,
 };
 
-use crate::env;
 
 pub fn pooling(dim: usize, input: &PrimitiveArray<Float32Type>) -> PrimitiveArray<Float32Type> {
 

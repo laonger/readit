@@ -1,13 +1,9 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::fs::File;
 use std::env;
 
 use home;
 
-use serde::{Deserialize, Serialize};
-use serde_yml;
 
 use crate::ignore_rules::Ignore;
 use crate::language_extensions::{
@@ -121,11 +117,12 @@ pub fn list_path(
     }
 }
 
-pub fn home_dir() -> (String, bool) {
+pub fn home_dir() -> (PathBuf, String, bool) {
     let _home_dir_p = home::home_dir().unwrap();
     let home_dir = _home_dir_p.as_path().join(".readit");
     (
-        home_dir.to_str().unwrap().to_string(),
+        home_dir.clone(),
+        home_dir.clone().to_str().unwrap().to_string(),
         home_dir.as_path().exists()
     )
 }

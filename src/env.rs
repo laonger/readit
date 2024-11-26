@@ -1,24 +1,19 @@
-use std::io;
-use std::fs;
 use std::env;
 use std::path::Path;
 
-use serde_yml;
 
 use crate::file_utils;
 use crate::config;
 use crate::ignore_rules::Ignore;
-use crate::language_extensions::{
-    LanguageExtensions,
-    FileExtensionList,
-    FileExtensionTypeMap
-};
+use crate::language_extensions::LanguageExtensions;
+use crate::history::History;
 
 #[derive(Debug, Clone)]
 pub struct Env {
     pub home_dir: String,
     pub work_dir: String,
     pub temp_dir: String,   // 项目配置，db等
+    pub history: History,
     pub config: config::Config, // 全局配置
     pub ignore: Ignore,
     pub language_extensions: LanguageExtensions,
@@ -43,6 +38,7 @@ impl Env {
             home_dir: String::from(""),
             work_dir: work_dir_string,
             temp_dir: temp_dir.to_str().unwrap().to_string(),
+            history : History::new(),
             config  : config::Config::new(),
             ignore  : Ignore::new(),
             language_extensions: LanguageExtensions::new(),

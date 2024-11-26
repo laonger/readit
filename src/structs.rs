@@ -1,6 +1,5 @@
 
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,15 +36,3 @@ pub struct GPTCodeSplitResponse {
 }
 
 
-#[derive(Debug, Clone)]
-pub enum InitStep {
-    InitHome,
-    //SetMainLanguage,
-    MakeIgnoreFile,
-    MakeLanguageExtensionsFile,
-    AskMainLanguage,
-    AskApiKey,
-    SetApiKey,
-    InitWorkDir,
-    EmbeddingFiles(Vec<String>),
-}

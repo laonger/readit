@@ -1,8 +1,7 @@
-use tokio::{runtime::Handle, task};
-use std::{iter::once, sync::Arc};
+use std::sync::Arc;
 
-use arrow::array::{Array, Float32Builder, ArrayData};
-use arrow_schema::{DataType, Field, Schema};
+use arrow::array::{Array, Float32Builder};
+use arrow_schema::DataType;
 use arrow_array::{
     cast::AsArray,
     Float32Array,
@@ -14,7 +13,6 @@ use async_openai::{
     types::{
         CreateChatCompletionRequestArgs,
         ChatCompletionResponseStream,
-        CreateChatCompletionResponse,
 
         ChatCompletionResponseFormat,
         ChatCompletionResponseFormatType,
@@ -39,12 +37,15 @@ use crate::{prompt_utils, structs};
 
 use crate::env;
 
+
+#[derive(Debug, Clone)]
 pub struct OpenAI {
     client: Client<OpenAIConfig>,
     dim: u32,
     chat_model: String,
     analyse_model: String,
     embedding_model: String,
+    pub env: env::Env,
 }
 
 impl OpenAI {
@@ -61,6 +62,7 @@ impl OpenAI {
             chat_model: env.config.chat_model(),
             analyse_model: env.config.analyse_model(),
             embedding_model: env.config.embedding_model(),
+            env: env.clone(), // TODO: clone可能会导致数据错误
         }
     }
     
@@ -94,7 +96,7 @@ impl OpenAI {
             .build()?;
 
 
-        let mut n = 0;
+        let n = 0;
         let mut tokens = 0;
         let code_description = loop {
 
@@ -121,11 +123,12 @@ impl OpenAI {
                         println!("{}", l);
                     }
                     panic!("Failed to parse response from OpenAI");
+                    // TODO
                     //n += 1;
                     //if n >= 3 {
                     //    panic!("Failed to parse response from OpenAI: {:?}", text);
                     //}
-                    continue;
+                    //continue;
                 }
             };
             break code_description
@@ -174,12 +177,14 @@ impl OpenAI {
     }
 
     pub async fn ask(&self,
-        query: String, code_list: Vec<String>, language: String
-    ) -> Result<ChatCompletionResponseStream, OpenAIError> 
+        query: String, code_list: Vec<String>
+    ) -> Result<(String, ChatCompletionResponseStream), OpenAIError> 
     {
+        let language = self.env.config.language();
         let prompt = prompt_utils::ask_prompt(
-            query, code_list, language
+            query.clone(), code_list, language
         );
+
 
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.chat_model)
@@ -195,7 +200,7 @@ impl OpenAI {
                     .build()?
                     .into(),
                 ChatCompletionRequestUserMessageArgs::default()
-                    .content(prompt)
+                    .content(prompt.clone())
                     .build()?
                     .into(),
             ])
@@ -211,7 +216,7 @@ impl OpenAI {
         //let _text = response.choices[0].clone().message.content.unwrap();
         //let _text = html_escape::decode_html_entities(&_text).to_string();
         //Ok((_text, tokens))
-        Ok(response)
+        Ok((prompt, response))
     }
 
     pub async fn chat(&self, message: String) -> Result<ChatCompletionResponseStream, OpenAIError> {

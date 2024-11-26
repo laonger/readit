@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 use serde_yml;
 
 const LANGUAGE_EXTENSIONS: &str = &"
