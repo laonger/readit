@@ -2,6 +2,7 @@ use std::io;
 use std::fs::File;
 use std::path::PathBuf;
 use std::io::{stdout, Write, Read};
+use std::sync::Arc;
 use futures::StreamExt;
 //use std::env as std_env;
 
@@ -10,7 +11,10 @@ use log::info;
 use md5;
 
 use tokio;
-use tokio::task::JoinSet;
+use tokio::{
+    task::JoinSet,
+    sync::Semaphore,
+};
 
 use crate::errors::Result;
 
@@ -107,6 +111,8 @@ pub async fn force_init(env: env::Env, ) -> Result<()> {
         path, &mut file_list, &env.ignore, &env.language_extensions
     );
 
+    let semaphore = Arc::new(Semaphore::new(100));
+
     let mut job_set = JoinSet::new();
     for (f, programming_lang) in file_list.iter() {
 
@@ -124,12 +130,15 @@ pub async fn force_init(env: env::Env, ) -> Result<()> {
 
         let _env = env.clone();
         
+        let _semaphore = semaphore.clone();
         job_set.spawn(async move {
+            let _permit = _semaphore.acquire().await.unwrap();
             embedding_file(
                 _env, f_name, 
                 programming_lang, f_path, 
                 md5_value, code, None
             ).await;
+            drop(_permit);
         });
         //embedding_file(
         //    _env, f_name, 
@@ -212,6 +221,7 @@ pub async fn init(env: env::Env ) -> Result<()> {
         return Ok(())
     }
     println!("analysing....");
+    let semaphore = Arc::new(Semaphore::new(100));
     let mut job_set = JoinSet::new();
     for (f, f_path, programming_lang, code, md5_value) in _file_list.clone() {
 
@@ -220,12 +230,15 @@ pub async fn init(env: env::Env ) -> Result<()> {
         let f_name = f.to_str().unwrap().to_string().clone();
         let programming_lang = programming_lang.clone();
         
+        let _semaphore = semaphore.clone();
         job_set.spawn(async move {
+            let _permit = _semaphore.acquire().await.unwrap();
             embedding_file(
                 _env, f_name, 
                 programming_lang, f_path, 
                 md5_value, code, Some(true)
             ).await;
+            drop(_permit);
         });
 
     };
