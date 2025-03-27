@@ -7,6 +7,7 @@ use arrow_array::{
     Float32Array,
 };
 
+
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -14,8 +15,8 @@ use async_openai::{
         CreateChatCompletionRequestArgs,
         ChatCompletionResponseStream,
 
-        ChatCompletionResponseFormat,
-        ChatCompletionResponseFormatType,
+        ResponseFormat,
+        ResponseFormatJsonSchema,
 
         ChatCompletionRequestSystemMessageArgs,
         ChatCompletionRequestUserMessageArgs,
@@ -34,6 +35,9 @@ use serde_json;
 use html_escape;
 
 use crate::{prompt_utils, structs};
+use crate::prompt_string::{
+    ANALYSE_SOURCE_FILE_JSON_SCHEMA,
+};
 
 use crate::env;
 
@@ -75,14 +79,19 @@ impl OpenAI {
             programming_lang, code_string, language
         );
 
+        let response_format  = ResponseFormat::JsonSchema{
+            json_schema: ResponseFormatJsonSchema {
+                description: Some("Analyze the given source code file.".to_string()),
+                schema: Some(ANALYSE_SOURCE_FILE_JSON_SCHEMA.clone()),
+                name: "source_code_analysis".to_string(),
+                strict: Some(true),
+            }
+        };
+
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.analyse_model)
             .stream(false)
-            .response_format(
-                ChatCompletionResponseFormat {
-                    r#type: ChatCompletionResponseFormatType::JsonObject
-                }
-            )
+            .response_format(response_format)
             .messages([
                 ChatCompletionRequestSystemMessageArgs::default()
                     .content("As a professional programming expert, analyze the given source code file. Your goal is to thoroughly understand the content and purpose of the code. Your response should be in JSON format.")
@@ -108,7 +117,7 @@ impl OpenAI {
                 }
             };
 
-            //println!("{:?}", response);
+            println!("{:?}", response);
             let _text = response.choices[0].clone().message.content.unwrap();
             let text = if _text.starts_with("```json\n"){
                 _text.replace("```json\n", "").replace("```", "")
@@ -149,7 +158,6 @@ impl OpenAI {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.analyse_model)
             .stream(false)
-            //.response_format(ChatCompletionResponseFormatType::JsonObject)
             .messages([
                 ChatCompletionRequestSystemMessageArgs::default()
                     .content("As a professional programming expert, analyze the given source code file. Your response should be in JSON format.")
@@ -189,11 +197,7 @@ impl OpenAI {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.chat_model)
             .stream(true)
-            .response_format(
-                ChatCompletionResponseFormat {
-                    r#type: ChatCompletionResponseFormatType::Text
-                }
-            )
+            .response_format(ResponseFormat::Text)
             .messages([
                 ChatCompletionRequestSystemMessageArgs::default()
                     .content("You are a helpful assistant.")
@@ -309,11 +313,7 @@ impl OpenAI {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.chat_model)
             .stream(false)
-            .response_format(
-                ChatCompletionResponseFormat {
-                    r#type: ChatCompletionResponseFormatType::Text
-                }
-            )
+            .response_format(ResponseFormat::JsonObject)
             .messages([
                 ChatCompletionRequestSystemMessageArgs::default()
                     .content("You are a helpful assistant.")

@@ -9,7 +9,7 @@ edition = "2021"
 arrow = "52.2.0"
 arrow-array = "52.2.0"
 arrow-schema = "52.2.0"
-async-openai = "0.23.4"
+async-openai = "0.26.0"
 async-std = { version = "1.12.0", features = ["attributes"] }
 clap = { version = "4.5.16", features = ["derive"] }
 color-eyre = "0.6.3"
